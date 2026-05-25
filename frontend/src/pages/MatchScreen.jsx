@@ -8,7 +8,8 @@ export default function MatchScreen() {
   const [logs, setLogs] = useState([]);
 
   useEffect(() => {
-    const newSocket = io('http://localhost:8000');
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const newSocket = io(API_URL);
     setSocket(newSocket);
 
     newSocket.on('ball_result', (data) => {

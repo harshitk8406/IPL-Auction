@@ -6,15 +6,17 @@ export default function TeamSelection() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/teams/')
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    fetch(`${API_URL}/api/teams/`)
       .then(res => res.json())
       .then(data => setTeams(data));
   }, []);
 
   const selectTeam = async (teamId) => {
     const token = localStorage.getItem('access');
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
     try {
-      await fetch(`http://localhost:8000/api/teams/${teamId}/`, {
+      await fetch(`${API_URL}/api/teams/${teamId}/`, {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',
