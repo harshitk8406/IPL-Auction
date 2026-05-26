@@ -1,24 +1,15 @@
 services:
   - type: web
-    name: ipl-auction-backend
-    env: python
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt && python manage.py migrate
-    startCommand: gunicorn ipl_sim.wsgi
+    name: ipl-auction-app
+    env: node
+    # Build: install all deps and compile React frontend
+    buildCommand: npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend
+    # Start: Node.js serves both the API and the compiled React app
+    startCommand: node backend/server.js
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
-      - key: DATABASE_URL
-        fromDatabase:
-          name: ipl-db
-          property: connectionString
-      - key: SECRET_KEY
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
         generateValue: true
-      - key: DEBUG
-        value: "False"
-
-databases:
-  - name: ipl-db
-    databaseName: ipldb
-    user: ipluser
-    plan: free
