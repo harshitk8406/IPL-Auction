@@ -42,15 +42,19 @@ router.post('/register', async (req, res) => {
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password)
-      return res.status(400).json({ error: 'Email and password required' });
+    const { email, username, password } = req.body;
+    const identifier = email || username;
+    if (!identifier || !password)
+      return res.status(400).json({ error: 'Username/Email and password required' });
 
-    const user = await User.findOne({ where: { email } });
-    if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+    const user = await User.findOne({
+      where: username ? { username } : { email }
+    });
+    if (!user) return res.status(401).json({ error: 'Invalid username/email or password' });
+
 
     const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
+    if (!valid) return res.status(401).json({ error: 'Invalid username/email or password' });
 
     const token = signToken(user.id);
     res.json({
