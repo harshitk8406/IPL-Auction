@@ -10,7 +10,15 @@ export function SocketProvider({ children }) {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const SOCKET_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? window.location.origin : 'http://localhost:5000');
+    let baseUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? window.location.origin : 'http://localhost:8000');
+    // Ensure we only use the origin for sockets (e.g. if VITE_API_URL is "https://backend.onrender.com/api")
+    try {
+      if (baseUrl.startsWith('http')) {
+        baseUrl = new URL(baseUrl).origin;
+      }
+    } catch (e) { /* ignore */ }
+    
+    const SOCKET_URL = baseUrl;
     const socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       autoConnect: true,
