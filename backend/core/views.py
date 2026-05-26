@@ -21,6 +21,12 @@ def register(request):
         'access': str(refresh.access_token),
     }, status=status.HTTP_201_CREATED)
 
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_me(request):
+    serializer = UserSerializer(request.user)
+    return Response({'user': serializer.data})
+
 class TeamViewSet(viewsets.ModelViewSet):
     queryset = Team.objects.all()
     serializer_class = TeamSerializer

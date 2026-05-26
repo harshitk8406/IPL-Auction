@@ -30,19 +30,25 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (username, password) => {
     const data = await apiLogin({ username, password });
-    const { token: newToken, user: newUser } = data;
-    localStorage.setItem('ipl_token', newToken);
-    setToken(newToken);
-    setUser(newUser);
+    const token = data.access || data.token;
+    localStorage.setItem('ipl_token', token);
+    setToken(token);
+    
+    // Fetch user details with the new token
+    const userData = await apiGetMe(token);
+    setUser(userData.user || userData);
     return data;
   }, []);
 
   const register = useCallback(async (username, email, password) => {
     const data = await apiRegister({ username, email, password });
-    const { token: newToken, user: newUser } = data;
-    localStorage.setItem('ipl_token', newToken);
-    setToken(newToken);
-    setUser(newUser);
+    const token = data.access || data.token;
+    localStorage.setItem('ipl_token', token);
+    setToken(token);
+    
+    // Fetch user details with the new token
+    const userData = await apiGetMe(token);
+    setUser(userData.user || userData);
     return data;
   }, []);
 
