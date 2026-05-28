@@ -7,7 +7,7 @@ const router = express.Router();
 // GET /api/teams — List all 10 IPL teams
 router.get('/', async (req, res) => {
   try {
-    const teams = await Team.find().sort({ _id: 1 });
+    const teams = await Team.findAll({ order: [['id', 'ASC']] });
     res.json({ teams });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load teams' });
@@ -21,37 +21,29 @@ router.post('/select', authenticate, async (req, res) => {
     if (!gameId || !teamId) return res.status(400).json({ error: 'gameId and teamId required' });
 
     // Check if team slot exists in this game
-    const existing = await GameTeam.findOne({ gameId, teamId });
+    const existing = await GameTeam.findOne({ where: { gameId, teamId } });
     if (!existing) return res.status(404).json({ error: 'GameTeam slot not found' });
 
-    if (!existing.isAI && existing.userId !== null && String(existing.userId) !== String(req.user._id)) {
+    if (!existing.isAI && existing.userId !== null && existing.userId !== req.user.id) {
       return res.status(409).json({ error: 'Team already selected by another player' });
     }
 
     // If user already has a different team in this game, revert it to AI
-    const userTeam = await GameTeam.findOne({ gameId, userId: req.user._id });
-    if (userTeam && String(userTeam.teamId) !== String(teamId)) {
-      userTeam.userId = null;
-      userTeam.isAI = true;
-      await userTeam.save();
+    const userTeam = await GameTeam.findOne({ where: { gameId, userId: req.user.id } });
+    if (userTeam && userTeam.teamId !== parseInt(teamId)) {
+      await userTeam.update({ userId: null, isAI: true });
     }
 
-    existing.userId = req.user._id;
-    existing.isAI = false;
-    await existing.save();
+    await existing.update({ userId: req.user.id, isAI: false });
 
-    const updated = await GameTeam.findById(existing._id)
-      .populate('teamId')
-      .populate('userId', 'username');
+    const updated = await GameTeam.findByPk(existing.id, {
+      include: [
+        { model: Team, as: 'Team' },
+        { model: User, as: 'User', attributes: ['id', 'username'] },
+      ],
+    });
 
-    // Alias to match frontend expectations
-    const result = {
-      ...updated.toObject(),
-      Team: updated.teamId,
-      User: updated.userId,
-    };
-
-    res.json({ gameTeam: result });
+    res.json({ gameTeam: updated });
   } catch (err) {
     console.error('Select team error:', err);
     res.status(500).json({ error: 'Failed to select team' });
@@ -61,17 +53,13 @@ router.post('/select', authenticate, async (req, res) => {
 // GET /api/teams/:gameTeamId/squad — Get squad for a team in a game
 router.get('/:gameTeamId/squad', authenticate, async (req, res) => {
   try {
-    const squads = await Squad.find({ gameTeamId: req.params.gameTeamId })
-      .populate('playerId')
-      .sort({ soldPrice: -1 });
+    const squads = await Squad.findAll({
+      where: { gameTeamId: req.params.gameTeamId },
+      include: [{ model: Player, as: 'Player' }],
+      order: [['soldPrice', 'DESC']],
+    });
 
-    // Alias playerId to Player for frontend compatibility
-    const result = squads.map((s) => ({
-      ...s.toObject(),
-      Player: s.playerId,
-    }));
-
-    res.json({ squad: result });
+    res.json({ squad: squads });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load squad' });
   }

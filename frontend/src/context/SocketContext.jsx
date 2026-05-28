@@ -16,7 +16,7 @@ export function SocketProvider({ children }) {
       || (import.meta.env.PROD ? window.location.origin : 'http://localhost:5000');
 
     const socket = io(SOCKET_URL, {
-      // No custom path — use the default /socket.io
+      // Default /socket.io path — Express/Socket.IO default
       transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,

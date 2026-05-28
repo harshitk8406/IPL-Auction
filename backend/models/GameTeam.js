@@ -1,41 +1,37 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../database');
 
 // Represents one IPL franchise's participation slot in a specific game
-const gameTeamSchema = new mongoose.Schema(
-  {
-    gameId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Game',
-      required: true,
-    },
-    teamId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Team',
-      required: true,
-    },
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      default: null, // null = AI controlled
-    },
-    purseRemaining: {
-      type: Number, // in Lakhs
-      default: 9000, // 90 Crore = 9000 Lakhs
-    },
-    squadSize: {
-      type: Number,
-      default: 0,
-    },
-    isAI: {
-      type: Boolean,
-      default: true,
-    },
-    overseasCount: {
-      type: Number,
-      default: 0,
-    },
+const GameTeam = sequelize.define('GameTeam', {
+  gameId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
   },
-  { timestamps: true }
-);
+  teamId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+  },
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    defaultValue: null, // null = AI controlled
+  },
+  isAI: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+  },
+  purseRemaining: {
+    type: DataTypes.INTEGER, // in Lakhs
+    defaultValue: 9000,     // 90 Crore = 9000 Lakhs
+  },
+  squadSize: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
+  overseasCount: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
+}, { tableName: 'game_teams', timestamps: true });
 
-module.exports = mongoose.model('GameTeam', gameTeamSchema);
+module.exports = GameTeam;

@@ -2,17 +2,17 @@ services:
   - type: web
     name: ipl-auction-app
     env: node
-    # NODE_ENV=development during install so devDeps (vite, etc.) are included
+    # NODE_ENV=development during frontend install so devDeps (vite, etc.) are included
     buildCommand: >
       npm install --prefix backend &&
       NODE_ENV=development npm install --prefix frontend &&
       npm run build --prefix frontend
-    # At runtime, Node.js serves the compiled React app + API
+    # Node.js serves the compiled React app + API + SQLite DB
     startCommand: node backend/server.js
     envVars:
       - key: NODE_ENV
         value: production
       - key: JWT_SECRET
         generateValue: true
-      - key: MONGODB_URI
-        sync: false
+      - key: DB_PATH
+        value: /opt/render/project/src/backend/data.sqlite

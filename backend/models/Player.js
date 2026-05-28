@@ -1,34 +1,30 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../database');
 
-const playerSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: true,
-    },
-    role: {
-      type: String,
-      enum: ['Batsman', 'Bowler', 'All-Rounder', 'Wicketkeeper'],
-      required: true,
-    },
-    nationality: {
-      type: String,
-      enum: ['Indian', 'Overseas'],
-      required: true,
-    },
-    basePrice: {
-      type: Number, // in Lakhs
-      required: true,
-      default: 20,
-    },
-    battingStyle: {
-      type: String,
-    },
-    bowlingStyle: {
-      type: String,
-    },
+const Player = sequelize.define('Player', {
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false,
   },
-  { timestamps: true }
-);
+  role: {
+    type: DataTypes.ENUM('Batsman', 'Bowler', 'All-Rounder', 'Wicketkeeper'),
+    allowNull: false,
+  },
+  nationality: {
+    type: DataTypes.ENUM('Indian', 'Overseas'),
+    allowNull: false,
+  },
+  basePrice: {
+    type: DataTypes.INTEGER, // in Lakhs
+    allowNull: false,
+    defaultValue: 20,
+  },
+  battingStyle: {
+    type: DataTypes.STRING,
+  },
+  bowlingStyle: {
+    type: DataTypes.STRING,
+  },
+}, { tableName: 'players', timestamps: true });
 
-module.exports = mongoose.model('Player', playerSchema);
+module.exports = Player;

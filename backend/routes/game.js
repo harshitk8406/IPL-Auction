@@ -18,20 +18,20 @@ router.post('/create', authenticate, async (req, res) => {
     // Ensure unique code
     do {
       lobbyCode = generateLobbyCode();
-    } while (await Game.findOne({ lobbyCode }));
+    } while (await Game.findOne({ where: { lobbyCode } }));
 
     const game = await Game.create({
       lobbyCode,
-      hostUserId: req.user._id,
+      hostUserId: req.user.id,
       status: 'waiting',
     });
 
     // Pre-create 10 GameTeam slots (all AI initially)
-    const teams = await Team.find().sort({ _id: 1 });
-    await GameTeam.insertMany(
+    const teams = await Team.findAll({ order: [['id', 'ASC']] });
+    await GameTeam.bulkCreate(
       teams.map((t) => ({
-        gameId: game._id,
-        teamId: t._id,
+        gameId: game.id,
+        teamId: t.id,
         userId: null,
         isAI: true,
         purseRemaining: 9000,
@@ -41,11 +41,11 @@ router.post('/create', authenticate, async (req, res) => {
     );
 
     // Create empty auction state
-    await AuctionState.create({ gameId: game._id });
+    await AuctionState.create({ gameId: game.id });
 
     res.status(201).json({
       game: {
-        id: game._id,
+        id: game.id,
         lobbyCode: game.lobbyCode,
         status: game.status,
         hostUserId: game.hostUserId,
@@ -63,13 +63,13 @@ router.post('/join', authenticate, async (req, res) => {
     const { lobbyCode } = req.body;
     if (!lobbyCode) return res.status(400).json({ error: 'Lobby code required' });
 
-    const game = await Game.findOne({ lobbyCode: lobbyCode.toUpperCase() });
+    const game = await Game.findOne({ where: { lobbyCode: lobbyCode.toUpperCase() } });
     if (!game) return res.status(404).json({ error: 'Lobby not found' });
     if (game.status !== 'waiting') return res.status(400).json({ error: 'Game already started' });
 
     res.json({
       game: {
-        id: game._id,
+        id: game.id,
         lobbyCode: game.lobbyCode,
         status: game.status,
         hostUserId: game.hostUserId,
@@ -84,22 +84,19 @@ router.post('/join', authenticate, async (req, res) => {
 // GET /api/game/:gameId/state — Full game state
 router.get('/:gameId/state', authenticate, async (req, res) => {
   try {
-    const game = await Game.findById(req.params.gameId);
+    const game = await Game.findByPk(req.params.gameId);
     if (!game) return res.status(404).json({ error: 'Game not found' });
 
-    const gameTeams = await GameTeam.find({ gameId: game._id })
-      .populate('teamId', null, 'Team')
-      .populate('userId', 'username', 'User')
-      .sort({ teamId: 1 });
+    const gameTeams = await GameTeam.findAll({
+      where: { gameId: game.id },
+      include: [
+        { model: Team, as: 'Team' },
+        { model: User, as: 'User', attributes: ['id', 'username'] },
+      ],
+      order: [['teamId', 'ASC']],
+    });
 
-    // Rename populated fields to match frontend expectations (Team, User aliases)
-    const formattedTeams = gameTeams.map((gt) => ({
-      ...gt.toObject(),
-      Team: gt.teamId,
-      User: gt.userId,
-    }));
-
-    res.json({ game, gameTeams: formattedTeams });
+    res.json({ game, gameTeams });
   } catch (err) {
     console.error('Game state error:', err);
     res.status(500).json({ error: 'Failed to load game state' });
@@ -109,7 +106,7 @@ router.get('/:gameId/state', authenticate, async (req, res) => {
 // GET /api/game/:gameId — Basic game info
 router.get('/:gameId', authenticate, async (req, res) => {
   try {
-    const game = await Game.findById(req.params.gameId);
+    const game = await Game.findByPk(req.params.gameId);
     if (!game) return res.status(404).json({ error: 'Game not found' });
     res.json({ game });
   } catch (err) {
@@ -120,24 +117,24 @@ router.get('/:gameId', authenticate, async (req, res) => {
 // POST /api/game/:gameId/start — Host starts the auction
 router.post('/:gameId/start', authenticate, async (req, res) => {
   try {
-    const game = await Game.findById(req.params.gameId);
+    const game = await Game.findByPk(req.params.gameId);
     if (!game) return res.status(404).json({ error: 'Game not found' });
-    if (String(game.hostUserId) !== String(req.user._id))
+    if (game.hostUserId !== req.user.id)
       return res.status(403).json({ error: 'Only host can start' });
     if (game.status !== 'waiting') return res.status(400).json({ error: 'Game already started' });
 
     // Shuffle all player IDs for the pool
-    const players = await Player.find({}, '_id');
-    const shuffled = players.map((p) => p._id).sort(() => Math.random() - 0.5);
+    const players = await Player.findAll({ attributes: ['id'] });
+    const shuffled = players.map((p) => p.id).sort(() => Math.random() - 0.5);
 
     game.status = 'auction';
-    game.playerPool = shuffled;
+    game.playerPool = shuffled; // setter auto-serialises to JSON string
     await game.save();
 
     // Update auction state with shuffled pool
-    const auctionState = await AuctionState.findOne({ gameId: game._id });
+    const auctionState = await AuctionState.findOne({ where: { gameId: game.id } });
     if (auctionState) {
-      auctionState.playerPoolJson = shuffled;
+      auctionState.playerPoolJson = shuffled; // setter auto-serialises
       auctionState.status = 'nominating';
       await auctionState.save();
     }

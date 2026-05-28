@@ -1,35 +1,36 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../database');
 
-const gameSchema = new mongoose.Schema(
-  {
-    lobbyCode: {
-      type: String,
-      required: true,
-      unique: true,
-      maxlength: 8,
+const Game = sequelize.define('Game', {
+  lobbyCode: {
+    type: DataTypes.STRING(8),
+    allowNull: false,
+    unique: true,
+  },
+  status: {
+    type: DataTypes.ENUM('waiting', 'auction', 'complete'),
+    defaultValue: 'waiting',
+  },
+  hostUserId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+  },
+  maxPlayers: {
+    type: DataTypes.INTEGER,
+    defaultValue: 10,
+  },
+  // Stored as JSON string in SQLite; getter/setter handle serialisation
+  playerPool: {
+    type: DataTypes.TEXT,
+    defaultValue: '[]',
+    get() {
+      const val = this.getDataValue('playerPool');
+      try { return val ? JSON.parse(val) : []; } catch { return []; }
     },
-    status: {
-      type: String,
-      enum: ['waiting', 'auction', 'complete'],
-      default: 'waiting',
-    },
-    hostUserId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
-    maxPlayers: {
-      type: Number,
-      default: 10,
-    },
-    // Stores the shuffled player ObjectId pool for this game's auction
-    playerPool: {
-      type: [mongoose.Schema.Types.ObjectId],
-      ref: 'Player',
-      default: [],
+    set(val) {
+      this.setDataValue('playerPool', JSON.stringify(val ?? []));
     },
   },
-  { timestamps: true }
-);
+}, { tableName: 'games', timestamps: true });
 
-module.exports = mongoose.model('Game', gameSchema);
+module.exports = Game;

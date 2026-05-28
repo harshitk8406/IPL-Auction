@@ -1,34 +1,30 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../database');
 
-const teamSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: true,
-    },
-    shortName: {
-      type: String,
-      required: true,
-      unique: true,
-      maxlength: 5,
-    },
-    primaryColor: {
-      type: String,
-      default: '#000000',
-    },
-    secondaryColor: {
-      type: String,
-      default: '#ffffff',
-    },
-    city: {
-      type: String,
-    },
-    logoInitials: {
-      type: String,
-      maxlength: 3,
-    },
+const Team = sequelize.define('Team', {
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false,
   },
-  { timestamps: true }
-);
+  shortName: {
+    type: DataTypes.STRING(5),
+    allowNull: false,
+    unique: true,
+  },
+  primaryColor: {
+    type: DataTypes.STRING(10),
+    defaultValue: '#000000',
+  },
+  secondaryColor: {
+    type: DataTypes.STRING(10),
+    defaultValue: '#ffffff',
+  },
+  city: {
+    type: DataTypes.STRING,
+  },
+  logoInitials: {
+    type: DataTypes.STRING(5),
+  },
+}, { tableName: 'teams', timestamps: true });
 
-module.exports = mongoose.model('Team', teamSchema);
+module.exports = Team;

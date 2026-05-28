@@ -5,8 +5,9 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
 
-const connectDB = require('./database');
-const { Team, Player } = require('./models');
+const sequelize = require('./database');
+const { sequelize: _seq, ...models } = require('./models'); // ensure associations are registered
+const { Team, Player } = models;
 const auctionService = require('./services/auctionService');
 const registerAuctionSocket = require('./socket/auctionSocket');
 
@@ -36,36 +37,35 @@ app.use(cors({
 app.use(express.json());
 
 // ── Routes ────────────────────────────────────────────────────────
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/game', require('./routes/game'));
-app.use('/api/teams', require('./routes/teams'));
+app.use('/api/auth',    require('./routes/auth'));
+app.use('/api/game',    require('./routes/game'));
+app.use('/api/teams',   require('./routes/teams'));
 app.use('/api/auction', require('./routes/auction'));
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.get('/api/health', (req, res) =>
+  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+);
 
 // ── Serve React Frontend (Production) ─────────────────────────────
 const frontendDistPath = path.join(__dirname, '../frontend/dist');
 app.use(express.static(frontendDistPath));
-
 app.get('*', (req, res) => {
   res.sendFile(path.join(frontendDistPath, 'index.html'));
 });
 
 // ── Seed Database ─────────────────────────────────────────────────
 async function seedDatabase() {
-  // Seed teams
-  const existingTeams = await Team.countDocuments();
+  const existingTeams = await Team.count();
   if (existingTeams === 0) {
     console.log('[Seed] Seeding 10 IPL teams...');
-    await Team.insertMany(teamsData);
+    await Team.bulkCreate(teamsData);
     console.log('[Seed] Teams seeded.');
   }
 
-  // Seed players
-  const existingPlayers = await Player.countDocuments();
+  const existingPlayers = await Player.count();
   if (existingPlayers === 0) {
     console.log('[Seed] Seeding players...');
-    await Player.insertMany(playersData);
+    await Player.bulkCreate(playersData);
     console.log(`[Seed] ${playersData.length} players seeded.`);
   }
 }
@@ -73,7 +73,10 @@ async function seedDatabase() {
 // ── Start Server ──────────────────────────────────────────────────
 async function startServer() {
   try {
-    await connectDB();
+    // Connect and create tables (if they don't exist yet)
+    await sequelize.authenticate();
+    await sequelize.sync({ force: false });
+    console.log('[DB] SQLite connected and tables ready.');
 
     await seedDatabase();
 

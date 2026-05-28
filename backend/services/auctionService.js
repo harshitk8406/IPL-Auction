@@ -1,16 +1,16 @@
 /**
  * Auction Service — Core auction state management
  * Uses in-memory state (Map) per game for speed,
- * persisting key events to MongoDB.
+ * persisting key events to SQLite via Sequelize.
  */
 
 const { AuctionState, GameTeam, Player, Squad, Game, Team, User } = require('../models');
 const { getAIDecision, getBidIncrement } = require('./aiService');
 
-const BID_TIMER_SECONDS = 20;
+const BID_TIMER_SECONDS   = 20;
 const RESET_TIMER_SECONDS = 12;
-const AI_BID_DELAY_MIN = 1800;
-const AI_BID_DELAY_MAX = 4500;
+const AI_BID_DELAY_MIN    = 1800;
+const AI_BID_DELAY_MAX    = 4500;
 
 class AuctionService {
   constructor() {
@@ -31,21 +31,25 @@ class AuctionService {
    * Initialise in-memory state for a game when auction starts.
    */
   async initGame(gameId) {
-    const auctionState = await AuctionState.findOne({ gameId });
+    const auctionState = await AuctionState.findOne({ where: { gameId } });
     if (!auctionState) return null;
 
-    const gameTeams = await GameTeam.find({ gameId })
-      .populate('teamId')
-      .populate('userId', 'username');
+    const gameTeams = await GameTeam.findAll({
+      where: { gameId },
+      include: [
+        { model: Team, as: 'Team' },
+        { model: User, as: 'User', attributes: ['id', 'username'] },
+      ],
+    });
 
     const teamStates = new Map();
     for (const gt of gameTeams) {
-      teamStates.set(String(gt._id), {
-        id: String(gt._id),
-        teamId: gt.teamId._id,
-        teamName: gt.teamId.shortName,
-        teamColor: gt.teamId.primaryColor,
-        userId: gt.userId ? String(gt.userId._id) : null,
+      teamStates.set(String(gt.id), {
+        id: String(gt.id),
+        teamId: gt.Team.id,
+        teamName: gt.Team.shortName,
+        teamColor: gt.Team.primaryColor,
+        userId: gt.User ? String(gt.User.id) : null,
         isAI: gt.isAI,
         purseRemaining: gt.purseRemaining,
         squadSize: gt.squadSize,
@@ -54,6 +58,7 @@ class AuctionService {
       });
     }
 
+    // playerPoolJson getter returns a parsed array already
     const live = {
       gameId: String(gameId),
       status: 'nominating',
@@ -98,28 +103,28 @@ class AuctionService {
     if (allFull) return this._completeAuction(gameIdStr);
 
     const playerId = live.playerPool.shift();
-    const player = await Player.findById(playerId);
+    const player = await Player.findByPk(playerId);
     if (!player) return this.nominateNextPlayer(gameIdStr); // skip missing player
 
     live.currentPlayer = player;
-    live.currentBid = player.basePrice;
+    live.currentBid    = player.basePrice;
     live.highestBidder = null;
-    live.status = 'bidding';
+    live.status        = 'bidding';
     live.round++;
 
     const timerEnd = new Date(Date.now() + BID_TIMER_SECONDS * 1000);
-    live.timerEnd = timerEnd;
+    live.timerEnd  = timerEnd;
 
     // Persist to DB
-    const auctionState = await AuctionState.findOne({ gameId: gameIdStr });
+    const auctionState = await AuctionState.findOne({ where: { gameId: gameIdStr } });
     if (auctionState) {
-      auctionState.status = 'bidding';
-      auctionState.currentPlayerId = player._id;
-      auctionState.currentBid = player.basePrice;
+      auctionState.status                  = 'bidding';
+      auctionState.currentPlayerId         = player.id;
+      auctionState.currentBid              = player.basePrice;
       auctionState.highestBidderGameTeamId = null;
-      auctionState.timerEnd = timerEnd;
-      auctionState.round = live.round;
-      auctionState.playerPoolJson = live.playerPool;
+      auctionState.timerEnd                = timerEnd;
+      auctionState.round                   = live.round;
+      auctionState.playerPoolJson          = live.playerPool; // setter auto-serialises
       await auctionState.save();
     }
 
@@ -154,7 +159,7 @@ class AuctionService {
    * Place a bid (human or AI).
    */
   async placeBid(gameId, gameTeamId, amount, isAI = false) {
-    const gameIdStr = String(gameId);
+    const gameIdStr     = String(gameId);
     const gameTeamIdStr = String(gameTeamId);
 
     const live = this.liveGames.get(gameIdStr);
@@ -176,7 +181,7 @@ class AuctionService {
     if (live.highestBidder === gameTeamIdStr) return { success: false, error: 'You are already the highest bidder' };
 
     // Apply bid
-    live.currentBid = amount;
+    live.currentBid    = amount;
     live.highestBidder = gameTeamIdStr;
 
     // Reset timer
@@ -187,10 +192,10 @@ class AuctionService {
 
     this.emit(gameIdStr, 'bid-placed', {
       gameTeamId: gameTeamIdStr,
-      teamName: teamState.teamName,
-      teamColor: teamState.teamColor,
+      teamName:   teamState.teamName,
+      teamColor:  teamState.teamColor,
       amount,
-      timerEnd: newTimerEnd.toISOString(),
+      timerEnd:   newTimerEnd.toISOString(),
       isAI,
       serverTime: new Date().toISOString(),
     });
@@ -239,7 +244,6 @@ class AuctionService {
   }
 
   _startTimer(gameId, seconds) {
-    const live = this.liveGames.get(gameId);
     let remaining = seconds;
 
     const tickInterval = setInterval(() => {
@@ -314,17 +318,20 @@ class AuctionService {
 
       // Persist to DB
       try {
-        await GameTeam.findByIdAndUpdate(highestBidder, {
-          purseRemaining: winnerState.purseRemaining,
-          squadSize: winnerState.squadSize,
-          overseasCount: winnerState.overseasCount,
-        });
+        await GameTeam.update(
+          {
+            purseRemaining: winnerState.purseRemaining,
+            squadSize:      winnerState.squadSize,
+            overseasCount:  winnerState.overseasCount,
+          },
+          { where: { id: highestBidder } }
+        );
 
         await Squad.create({
           gameId,
           gameTeamId: highestBidder,
-          playerId: currentPlayer._id,
-          soldPrice: currentBid,
+          playerId:   currentPlayer.id,
+          soldPrice:  currentBid,
         });
       } catch (e) {
         console.error('DB persist error on hammer down:', e);
@@ -357,14 +364,14 @@ class AuctionService {
 
   async _persistAuctionState(gameId, live, status) {
     try {
-      const auctionState = await AuctionState.findOne({ gameId });
+      const auctionState = await AuctionState.findOne({ where: { gameId } });
       if (auctionState) {
-        auctionState.status = status;
-        auctionState.currentPlayerId = live.currentPlayer?._id || null;
-        auctionState.currentBid = live.currentBid;
+        auctionState.status                  = status;
+        auctionState.currentPlayerId         = live.currentPlayer?.id || null;
+        auctionState.currentBid              = live.currentBid;
         auctionState.highestBidderGameTeamId = live.highestBidder || null;
-        auctionState.logJson = live.log.slice(0, 100);
-        auctionState.playerPoolJson = live.playerPool;
+        auctionState.logJson                 = live.log.slice(0, 100); // setter auto-serialises
+        auctionState.playerPoolJson          = live.playerPool;         // setter auto-serialises
         await auctionState.save();
       }
     } catch (e) {
@@ -381,8 +388,8 @@ class AuctionService {
     this._clearAIPendingBids(live);
 
     try {
-      await Game.findByIdAndUpdate(gameId, { status: 'complete' });
-      const auctionState = await AuctionState.findOne({ gameId });
+      await Game.update({ status: 'complete' }, { where: { id: gameId } });
+      const auctionState = await AuctionState.findOne({ where: { gameId } });
       if (auctionState) {
         auctionState.status = 'complete';
         await auctionState.save();
@@ -391,25 +398,29 @@ class AuctionService {
       console.error('Complete auction persist error:', e);
     }
 
-    const finalGameTeams = await GameTeam.find({ gameId })
-      .populate('teamId')
-      .populate('userId', 'username');
+    const finalGameTeams = await GameTeam.findAll({
+      where: { gameId },
+      include: [
+        { model: Team, as: 'Team' },
+        { model: User, as: 'User', attributes: ['id', 'username'] },
+      ],
+    });
 
     this.emit(gameId, 'auction-complete', {
       gameTeams: finalGameTeams.map((gt) => ({
-        id: gt._id,
-        teamName: gt.teamId.name,
-        shortName: gt.teamId.shortName,
-        primaryColor: gt.teamId.primaryColor,
-        userId: gt.userId?._id || null,
-        isAI: gt.isAI,
+        id:           gt.id,
+        teamName:     gt.Team.name,
+        shortName:    gt.Team.shortName,
+        primaryColor: gt.Team.primaryColor,
+        userId:       gt.User?.id || null,
+        isAI:         gt.isAI,
         purseRemaining: gt.purseRemaining,
-        squadSize: gt.squadSize,
+        squadSize:    gt.squadSize,
       })),
     });
 
     // Clean up in-memory state after a delay
-    setTimeout(() => this.liveGames.delete(gameId), 60000);
+    setTimeout(() => this.liveGames.delete(String(gameId)), 60000);
   }
 
   getLiveState(gameId) {
