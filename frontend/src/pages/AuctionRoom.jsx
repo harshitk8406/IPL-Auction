@@ -9,6 +9,7 @@ import PlayerCard from '../components/PlayerCard.jsx';
 import BidPanel from '../components/BidPanel.jsx';
 import TeamCard from '../components/TeamCard.jsx';
 import AuctionLog from '../components/AuctionLog.jsx';
+import TeamLogo from '../components/TeamLogo.jsx';
 import { formatCrore } from '../api/index.js';
 import {
   Loader2,
@@ -74,10 +75,11 @@ export default function AuctionRoom() {
   useEffect(() => {
     if (lastEvent?.type !== 'sold') return;
     setSoldCard({
-      player:   lastEvent.player,
-      soldTo:   lastEvent.soldTo,
-      color:    lastEvent.soldToColor || '#f59e0b',
-      price:    lastEvent.soldPrice,
+      player:    lastEvent.player,
+      soldTo:    lastEvent.soldTo,
+      shortName: lastEvent.soldToShortName,
+      color:     lastEvent.soldToColor || '#f59e0b',
+      price:     lastEvent.soldPrice,
     });
     const t = setTimeout(() => setSoldCard(null), 3000);
     return () => clearTimeout(t);
@@ -232,14 +234,14 @@ export default function AuctionRoom() {
               boxShadow: `0 0 120px ${soldCard.color}33`,
             }}
           >
-            {/* Background watermark */}
-            <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none">
-              <span
-                className="text-[12rem] font-rajdhani font-bold whitespace-nowrap"
-                style={{ color: soldCard.color }}
-              >
-                {soldCard.soldTo}
-              </span>
+            {/* Background watermark logo */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
+              <TeamLogo
+                shortName={soldCard.shortName}
+                color={soldCard.color}
+                size={320}
+                className="rounded-3xl"
+              />
             </div>
 
             {/* 3-second countdown bar */}
@@ -327,16 +329,11 @@ export default function AuctionRoom() {
           {myGameTeam && (
             <div className="glass rounded-2xl p-4">
               <div className="flex items-center gap-2 mb-3">
-                <div
-                  className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-rajdhani font-bold"
-                  style={{
-                    background: `${myGameTeam.Team?.primaryColor || myGameTeam.team?.primaryColor || '#f59e0b'}22`,
-                    color: myGameTeam.Team?.primaryColor || myGameTeam.team?.primaryColor || '#f59e0b',
-                    border: `1px solid ${myGameTeam.Team?.primaryColor || myGameTeam.team?.primaryColor || '#f59e0b'}44`,
-                  }}
-                >
-                  {myGameTeam.Team?.shortName || myGameTeam.team?.shortName || '?'}
-                </div>
+                <TeamLogo
+                  shortName={myGameTeam.Team?.shortName || myGameTeam.team?.shortName}
+                  color={myGameTeam.Team?.primaryColor || myGameTeam.team?.primaryColor || '#f59e0b'}
+                  size={28}
+                />
                 <span className="font-rajdhani font-bold text-sm text-white/80">
                   Your Team
                 </span>

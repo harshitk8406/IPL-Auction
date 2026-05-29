@@ -1,5 +1,6 @@
 import { Users, Wallet, Bot, Crown } from 'lucide-react';
 import { formatCrore } from '../api/index.js';
+import TeamLogo from './TeamLogo.jsx';
 
 export default function TeamCard({ gameTeam, isHighestBidder, isCurrentUser, compact }) {
   if (!gameTeam) return null;
@@ -9,7 +10,7 @@ export default function TeamCard({ gameTeam, isHighestBidder, isCurrentUser, com
   const isAI = gameTeam.isAI || !user;
   const color = team.primaryColor || '#f59e0b';
   const purse = gameTeam.purseRemaining ?? 0;
-  const maxPurse = 9000; // 90 Cr in lakhs
+  const maxPurse = 12000; // 120 Cr in lakhs
   const pursePercent = Math.min(100, Math.round((purse / maxPurse) * 100));
 
   const getPurseColor = () => {
@@ -35,12 +36,7 @@ export default function TeamCard({ gameTeam, isHighestBidder, isCurrentUser, com
       >
         {/* Top row */}
         <div className="flex items-center gap-2 mb-2">
-          <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center font-rajdhani font-bold text-xs flex-shrink-0"
-            style={{ background: `${color}33`, color, border: `1px solid ${color}55` }}
-          >
-            {team.shortName || team.name?.slice(0, 2) || '??'}
-          </div>
+          <TeamLogo shortName={team.shortName} color={color} size={28} />
           <div className="min-w-0 flex-1">
             <p className="font-rajdhani font-bold text-sm text-white truncate leading-none">
               {team.name || 'Unknown'}
@@ -113,17 +109,7 @@ export default function TeamCard({ gameTeam, isHighestBidder, isCurrentUser, com
       <div className="p-4">
         {/* Header */}
         <div className="flex items-center gap-3 mb-4">
-          <div
-            className="w-12 h-12 rounded-xl flex items-center justify-center font-rajdhani font-bold text-sm flex-shrink-0"
-            style={{
-              background: `${color}22`,
-              color,
-              border: `2px solid ${color}55`,
-              boxShadow: `0 0 15px ${color}22`,
-            }}
-          >
-            {team.shortName || team.name?.slice(0, 3) || '???'}
-          </div>
+          <TeamLogo shortName={team.shortName} color={color} size={48} />
           <div className="min-w-0">
             <h3 className="font-rajdhani font-bold text-base text-white truncate">
               {team.name || 'Unknown Team'}

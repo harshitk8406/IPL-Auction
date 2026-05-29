@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
 import { apiGetGameState, apiGetTeams, apiSelectTeam, apiStartGame } from '../api/index.js';
 import Navbar from '../components/Navbar.jsx';
+import TeamLogo from '../components/TeamLogo.jsx';
 import {
   Users,
   Copy,
@@ -275,15 +276,8 @@ export default function Lobby() {
                     }}
                   >
                     {/* Team badge */}
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center font-rajdhani font-bold text-xs mb-3 transition-transform group-hover:scale-110"
-                      style={{
-                        background: `${color}22`,
-                        border: `2px solid ${color}55`,
-                        color,
-                      }}
-                    >
-                      {team.shortName || team.name?.slice(0, 3)}
+                    <div className="mb-3 transition-transform group-hover:scale-110">
+                      <TeamLogo shortName={team.shortName} color={color} size={48} />
                     </div>
 
                     <p className="font-rajdhani font-bold text-sm text-white leading-tight mb-1">
@@ -369,12 +363,7 @@ export default function Lobby() {
                           border: isMe ? '1px solid rgba(245,158,11,0.2)' : '1px solid transparent',
                         }}
                       >
-                        <div
-                          className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 font-rajdhani font-bold text-[10px]"
-                          style={{ background: `${color}22`, color, border: `1px solid ${color}44` }}
-                        >
-                          {t?.shortName || '?'}
-                        </div>
+                        <TeamLogo shortName={t?.shortName} color={color} size={28} />
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-inter text-white truncate">
                             {u?.username || 'AI Bot'}
