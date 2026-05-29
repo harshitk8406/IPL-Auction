@@ -408,7 +408,7 @@ export default function AuctionRoom() {
                   gameTeam={gt}
                   compact
                   isHighestBidder={
-                    highestBidder?.gameTeamId === (gt.id || gt._id)
+                    String(highestBidder?.gameTeamId) === String(gt.id || gt._id)
                   }
                   isCurrentUser={(gt.User?.id ?? gt.userId ?? gt.user?.id) === userId}
                 />

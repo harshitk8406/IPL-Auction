@@ -129,7 +129,7 @@ export function useAuction(gameId) {
 
       if (teamStates) {
         setGameTeams(prev => prev.map(gt => {
-          const ts = teamStates.find(t => t.id === gt.id);
+          const ts = teamStates.find(t => String(t.id) === String(gt.id));
           return ts ? { ...gt, purseRemaining: ts.purseRemaining, squadSize: ts.squadSize } : gt;
         }));
       }
@@ -143,7 +143,7 @@ export function useAuction(gameId) {
       setLastEvent({ type: 'started' });
       if (teamStates) {
         setGameTeams(prev => prev.map(gt => {
-          const ts = teamStates.find(t => t.id === gt.id);
+          const ts = teamStates.find(t => String(t.id) === String(gt.id));
           return ts ? { ...gt, purseRemaining: ts.purseRemaining, squadSize: ts.squadSize, isAI: ts.isAI } : gt;
         }));
       }
@@ -177,9 +177,10 @@ export function useAuction(gameId) {
       setLastEvent({ type: 'sold', player, soldTo: soldTo?.name || soldTo, soldToColor: soldTo?.color, soldToShortName: soldTo?.name, soldPrice });
       addLog(`🔨 SOLD! ${player?.name} → ${soldTo?.name || soldTo} for ₹${soldPrice}L`);
       // Update team purse/squad from server data
+      // soldTo.id comes from in-memory service as a String; gt.id from Sequelize is an Integer
       setGameTeams((prev) =>
         prev.map((gt) =>
-          (gt.id === soldTo?.id)
+          String(gt.id) === String(soldTo?.id)
             ? { ...gt, purseRemaining: teamPurse, squadSize: teamSquadSize }
             : gt
         )
@@ -207,7 +208,7 @@ export function useAuction(gameId) {
     const handleTeamSelected = ({ gameTeam }) => {
       if (!gameTeam) return;
       setGameTeams((prev) =>
-        prev.map((gt) => (gt.id === gameTeam.id ? { ...gt, ...gameTeam } : gt))
+        prev.map((gt) => (String(gt.id) === String(gameTeam.id) ? { ...gt, ...gameTeam } : gt))
       );
     };
 
