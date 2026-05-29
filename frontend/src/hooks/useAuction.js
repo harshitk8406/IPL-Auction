@@ -174,7 +174,7 @@ export function useAuction(gameId) {
 
     const handlePlayerSold = ({ player, soldTo, soldPrice, teamPurse, teamSquadSize }) => {
       setStatus('sold');
-      setLastEvent({ type: 'sold', player, soldTo: soldTo?.name || soldTo, soldPrice });
+      setLastEvent({ type: 'sold', player, soldTo: soldTo?.name || soldTo, soldToColor: soldTo?.color, soldToShortName: soldTo?.name, soldPrice });
       addLog(`🔨 SOLD! ${player?.name} → ${soldTo?.name || soldTo} for ₹${soldPrice}L`);
       // Update team purse/squad from server data
       setGameTeams((prev) =>

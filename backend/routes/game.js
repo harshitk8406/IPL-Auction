@@ -34,7 +34,7 @@ router.post('/create', authenticate, async (req, res) => {
         teamId: t.id,
         userId: null,
         isAI: true,
-        purseRemaining: 9000,
+        purseRemaining: 12000,
         squadSize: 0,
         overseasCount: 0,
       }))

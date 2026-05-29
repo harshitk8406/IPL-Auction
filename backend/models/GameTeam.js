@@ -22,7 +22,7 @@ const GameTeam = sequelize.define('GameTeam', {
   },
   purseRemaining: {
     type: DataTypes.INTEGER, // in Lakhs
-    defaultValue: 9000,     // 90 Crore = 9000 Lakhs
+    defaultValue: 12000,    // 120 Crore = 12000 Lakhs
   },
   squadSize: {
     type: DataTypes.INTEGER,

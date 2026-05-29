@@ -153,3 +153,9 @@ h1, h2, h3, h4, h5, h6 {
   background-image: radial-gradient(circle, rgba(245, 158, 11, 0.1) 1px, transparent 1px);
   background-size: 30px 30px;
 }
+
+/* Sold-card 3-second countdown bar */
+@keyframes shrink-bar {
+  from { width: 100%; }
+  to   { width: 0%; }
+}

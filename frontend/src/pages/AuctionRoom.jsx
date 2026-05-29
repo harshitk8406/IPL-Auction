@@ -29,6 +29,7 @@ export default function AuctionRoom() {
   const [loadingGame, setLoadingGame] = useState(true);
   const [gameError, setGameError] = useState('');
   const [notification, setNotification] = useState(null);
+  const [soldCard, setSoldCard] = useState(null);
 
   const userId = user?.id || user?._id;
 
@@ -69,15 +70,25 @@ export default function AuctionRoom() {
     }
   }, [gameId, userId, connected, joinLobby]);
 
-  // Show notification on events
+  // Show sold card overlay for 3 seconds
+  useEffect(() => {
+    if (lastEvent?.type !== 'sold') return;
+    setSoldCard({
+      player:   lastEvent.player,
+      soldTo:   lastEvent.soldTo,
+      color:    lastEvent.soldToColor || '#f59e0b',
+      price:    lastEvent.soldPrice,
+    });
+    const t = setTimeout(() => setSoldCard(null), 3000);
+    return () => clearTimeout(t);
+  }, [lastEvent]);
+
+  // Show toast notification on events (except sold — handled by card above)
   useEffect(() => {
     if (!lastEvent) return;
     let msg = '';
     let color = '#f59e0b';
-    if (lastEvent.type === 'sold') {
-      msg = `🔨 ${lastEvent.player?.name} SOLD to ${lastEvent.soldTo} for ${formatCrore(lastEvent.soldPrice)}`;
-      color = '#22c55e';
-    } else if (lastEvent.type === 'unsold') {
+    if (lastEvent.type === 'unsold') {
       msg = `❌ ${lastEvent.player?.name} goes UNSOLD`;
       color = '#ef4444';
     } else if (lastEvent.type === 'bid') {
@@ -211,38 +222,64 @@ export default function AuctionRoom() {
         </div>
       )}
 
-      {/* ─── FULL SCREEN OVERLAYS ─── */}
-      {status === 'sold' && currentPlayer && soldToTeam && (
+      {/* ─── SOLD CARD OVERLAY (auto-dismisses after 3s) ─── */}
+      {soldCard && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm animate-fade-in px-4">
-          <div className="relative text-center p-12 max-w-4xl w-full glass rounded-3xl overflow-hidden"
-               style={{
-                 borderColor: `${soldToTeam.Team?.primaryColor || soldToTeam.team?.primaryColor || '#f59e0b'}44`,
-                 boxShadow: `0 0 120px ${soldToTeam.Team?.primaryColor || soldToTeam.team?.primaryColor || '#f59e0b'}33`,
-               }}>
-            {/* Background Watermark */}
+          <div
+            className="relative text-center p-12 max-w-4xl w-full glass rounded-3xl overflow-hidden"
+            style={{
+              borderColor: `${soldCard.color}44`,
+              boxShadow: `0 0 120px ${soldCard.color}33`,
+            }}
+          >
+            {/* Background watermark */}
             <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none">
-              <span className="text-[12rem] font-rajdhani font-bold whitespace-nowrap" style={{ color: soldToTeam.Team?.primaryColor || soldToTeam.team?.primaryColor || '#ffffff' }}>
-                {soldToTeam.Team?.shortName || soldToTeam.team?.shortName}
+              <span
+                className="text-[12rem] font-rajdhani font-bold whitespace-nowrap"
+                style={{ color: soldCard.color }}
+              >
+                {soldCard.soldTo}
               </span>
+            </div>
+
+            {/* 3-second countdown bar */}
+            <div className="absolute top-0 left-0 right-0 h-1 rounded-t-3xl overflow-hidden">
+              <div
+                className="h-full rounded-t-3xl"
+                style={{
+                  background: soldCard.color,
+                  animation: 'shrink-bar 3s linear forwards',
+                }}
+              />
             </div>
 
             <div className="relative z-10 animate-slide-up">
               <h2 className="text-6xl md:text-8xl font-rajdhani font-bold text-white mb-6 drop-shadow-2xl">
-                {currentPlayer.name}
+                {soldCard.player?.name}
               </h2>
-              
-              <div className="inline-flex items-center gap-4 px-8 py-3 rounded-full mb-12 shadow-2xl" 
-                   style={{ background: `${soldToTeam.Team?.primaryColor || soldToTeam.team?.primaryColor || '#f59e0b'}22`, border: `1px solid ${soldToTeam.Team?.primaryColor || soldToTeam.team?.primaryColor || '#f59e0b'}66` }}>
-                 <Trophy size={28} style={{ color: soldToTeam.Team?.primaryColor || soldToTeam.team?.primaryColor || '#f59e0b' }} className="animate-pulse" />
-                 <span className="font-rajdhani font-bold tracking-[0.2em] text-2xl" style={{ color: soldToTeam.Team?.primaryColor || soldToTeam.team?.primaryColor || '#f59e0b' }}>
-                   SOLD TO {(soldToTeam.Team?.name || soldToTeam.team?.name)?.toUpperCase()}
-                 </span>
+
+              <div
+                className="inline-flex items-center gap-4 px-8 py-3 rounded-full mb-12 shadow-2xl"
+                style={{
+                  background: `${soldCard.color}22`,
+                  border: `1px solid ${soldCard.color}66`,
+                }}
+              >
+                <Trophy size={28} style={{ color: soldCard.color }} className="animate-pulse" />
+                <span
+                  className="font-rajdhani font-bold tracking-[0.2em] text-2xl"
+                  style={{ color: soldCard.color }}
+                >
+                  SOLD TO {soldCard.soldTo?.toUpperCase()}
+                </span>
               </div>
 
               <div>
-                <span className="text-xl md:text-2xl font-inter text-white/50 block mb-2 uppercase tracking-[0.3em]">Winning Bid</span>
+                <span className="text-xl md:text-2xl font-inter text-white/50 block mb-2 uppercase tracking-[0.3em]">
+                  Winning Bid
+                </span>
                 <span className="text-7xl md:text-9xl font-rajdhani font-bold gold-text drop-shadow-[0_0_40px_rgba(245,158,11,0.6)]">
-                  {formatCrore(currentBid)}
+                  {formatCrore(soldCard.price)}
                 </span>
               </div>
             </div>
@@ -250,16 +287,20 @@ export default function AuctionRoom() {
         </div>
       )}
 
+      {/* ─── UNSOLD OVERLAY ─── */}
       {status === 'unsold' && currentPlayer && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm animate-fade-in px-4">
           <div className="text-center p-12 max-w-4xl w-full glass rounded-3xl overflow-hidden border-red-500/20 shadow-[0_0_120px_rgba(239,68,68,0.15)]">
             <h2 className="text-6xl md:text-8xl font-rajdhani font-bold text-white/60 mb-10 animate-slide-up drop-shadow-2xl">
               {currentPlayer.name}
             </h2>
-            <div className="inline-block px-10 py-4 rounded-full animate-slide-up bg-red-500/10 border border-red-500/30 shadow-2xl" style={{ animationDelay: '0.1s' }}>
-               <span className="font-rajdhani font-bold tracking-[0.4em] text-3xl text-red-400">
-                 WENT UNSOLD
-               </span>
+            <div
+              className="inline-block px-10 py-4 rounded-full animate-slide-up bg-red-500/10 border border-red-500/30 shadow-2xl"
+              style={{ animationDelay: '0.1s' }}
+            >
+              <span className="font-rajdhani font-bold tracking-[0.4em] text-3xl text-red-400">
+                WENT UNSOLD
+              </span>
             </div>
           </div>
         </div>
