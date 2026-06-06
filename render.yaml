@@ -18,3 +18,5 @@ services:
         generateValue: true
       - key: DB_PATH
         value: /opt/render/project/src/backend/data.sqlite
+      - key: GEMINI_API_KEY
+        sync: false   # set manually in Render dashboard

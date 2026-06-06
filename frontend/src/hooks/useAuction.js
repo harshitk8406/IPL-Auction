@@ -22,6 +22,11 @@ export function useAuction(gameId) {
   const [remainingPlayers, setRemainingPlayers] = useState(0);
   const [bidError, setBidError] = useState('');
 
+  // AI / Gemini state
+  const [aiCommentary, setAiCommentary]           = useState(null); // { text, type, teamColor }
+  const [aiInsight, setAiInsight]                 = useState(null); // { playerId, insight }
+  const [aiSquadAnalysis, setAiSquadAnalysis]     = useState(null); // [{ teamName, grade, verdict }]
+
   const timerRef = useRef(null);
   const serverClockOffsetRef = useRef(0);
   const gameTeamsRef = useRef([]);
@@ -218,6 +223,18 @@ export function useAuction(gameId) {
       setTimeout(() => setBidError(''), 4000);
     };
 
+    const handleAICommentary = ({ commentary, type, teamColor }) => {
+      setAiCommentary({ text: commentary, type, teamColor });
+    };
+
+    const handleAIInsight = ({ playerId, insight }) => {
+      setAiInsight({ playerId, insight });
+    };
+
+    const handleAISquadAnalysis = ({ analysis }) => {
+      setAiSquadAnalysis(analysis);
+    };
+
     on('lobby-state', handleLobbyState);
     on('auction-resumed', handleAuctionResumed);
     on('auction-started', handleAuctionStarted);
@@ -229,6 +246,9 @@ export function useAuction(gameId) {
     on('timer-tick', handleTimerTick);
     on('team-selected', handleTeamSelected);
     on('bid-error', handleBidError);
+    on('ai-commentary', handleAICommentary);
+    on('ai-player-insight', handleAIInsight);
+    on('ai-squad-analysis', handleAISquadAnalysis);
 
     return () => {
       off('lobby-state', handleLobbyState);
@@ -242,6 +262,9 @@ export function useAuction(gameId) {
       off('timer-tick', handleTimerTick);
       off('team-selected', handleTeamSelected);
       off('bid-error', handleBidError);
+      off('ai-commentary', handleAICommentary);
+      off('ai-player-insight', handleAIInsight);
+      off('ai-squad-analysis', handleAISquadAnalysis);
     };
   }, [socket, on, off, addLog]);
 
@@ -279,6 +302,9 @@ export function useAuction(gameId) {
     loading,
     remainingPlayers,
     bidError,
+    aiCommentary,
+    aiInsight,
+    aiSquadAnalysis,
     placeBid,
   };
 }

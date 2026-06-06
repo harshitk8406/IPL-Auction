@@ -10,6 +10,7 @@ import BidPanel from '../components/BidPanel.jsx';
 import TeamCard from '../components/TeamCard.jsx';
 import AuctionLog from '../components/AuctionLog.jsx';
 import TeamLogo from '../components/TeamLogo.jsx';
+import AICommentary from '../components/AICommentary.jsx';
 import { formatCrore } from '../api/index.js';
 import {
   Loader2,
@@ -18,6 +19,7 @@ import {
   ChevronRight,
   AlertCircle,
   Gavel,
+  Sparkles,
 } from 'lucide-react';
 
 export default function AuctionRoom() {
@@ -50,6 +52,9 @@ export default function AuctionRoom() {
     isComplete,
     loading: auctionLoading,
     bidError,
+    aiCommentary,
+    aiInsight,
+    aiSquadAnalysis,
     placeBid,
   } = useAuction(gameId);
 
@@ -175,42 +180,80 @@ export default function AuctionRoom() {
 
   // Auction complete screen
   if (isComplete) {
+    const gradeColors = { A: '#22c55e', B: '#3b82f6', C: '#f59e0b', D: '#ef4444' };
     return (
       <div className="min-h-screen animated-bg">
         <Navbar gameCode={game?.lobbyCode} />
-        <div className="flex items-center justify-center min-h-[80vh] px-4">
-          <div className="text-center max-w-2xl">
+        <div className="max-w-5xl mx-auto px-4 py-10">
+          {/* Trophy header */}
+          <div className="text-center mb-10">
             <div className="relative inline-block mb-6">
               <Trophy size={80} className="text-ipl-gold animate-float mx-auto" />
               <div className="absolute inset-0 bg-ipl-gold/20 blur-3xl" />
             </div>
-            <h1 className="font-rajdhani font-bold text-6xl gold-text mb-4">
-              AUCTION COMPLETE!
-            </h1>
-            <p className="text-white/50 font-inter mb-10">
-              All players have been auctioned. Check out the final squads!
-            </p>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-              {gameTeams.map((gt) => (
-                <TeamCard key={gt.id || gt._id} gameTeam={gt} isCurrentUser={myGameTeamId === (gt.id || gt._id)} />
-              ))}
+            <h1 className="font-rajdhani font-bold text-6xl gold-text mb-4">AUCTION COMPLETE!</h1>
+            <p className="text-white/50 font-inter">All players have been auctioned. Check out the final squads!</p>
+          </div>
+
+          {/* AI Squad Analysis */}
+          {aiSquadAnalysis && aiSquadAnalysis.length > 0 && (
+            <div className="mb-10">
+              <div className="flex items-center gap-2 mb-4">
+                <Sparkles size={18} className="text-purple-400" />
+                <h2 className="font-rajdhani font-bold text-xl text-white/80">AI Squad Analysis</h2>
+                <span className="text-[10px] text-white/30 font-inter ml-2 px-2 py-0.5 glass rounded-full">
+                  Powered by Gemini
+                </span>
+              </div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {aiSquadAnalysis.map((item) => (
+                  <div
+                    key={item.teamName}
+                    className="glass rounded-2xl p-4 flex items-start gap-3"
+                    style={{ borderColor: `${gradeColors[item.grade] || '#f59e0b'}33` }}
+                  >
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center font-rajdhani font-bold text-lg flex-shrink-0"
+                      style={{
+                        background: `${gradeColors[item.grade] || '#f59e0b'}22`,
+                        color: gradeColors[item.grade] || '#f59e0b',
+                        border: `2px solid ${gradeColors[item.grade] || '#f59e0b'}55`,
+                      }}
+                    >
+                      {item.grade}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-rajdhani font-bold text-sm text-white">{item.teamName}</p>
+                      <p className="text-white/50 text-xs font-inter mt-0.5 leading-relaxed">{item.verdict}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex flex-wrap justify-center gap-4">
-              {myGameTeam && (
-                <Link
-                  to={`/squad/${gameId}`}
-                  className="px-8 py-4 bg-ipl-gold text-black font-rajdhani font-bold text-xl rounded-full hover:bg-ipl-gold-light transition-all glow-gold hover:scale-105"
-                >
-                  View My Squad →
-                </Link>
-              )}
-              <button
-                onClick={() => navigate('/')}
-                className="px-8 py-4 glass font-rajdhani font-bold text-xl text-white/70 rounded-full hover:text-white transition-all"
+          )}
+
+          {/* Team cards */}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            {gameTeams.map((gt) => (
+              <TeamCard key={gt.id || gt._id} gameTeam={gt} isCurrentUser={myGameTeamId === (gt.id || gt._id)} />
+            ))}
+          </div>
+
+          <div className="flex flex-wrap justify-center gap-4">
+            {myGameTeam && (
+              <Link
+                to={`/squad/${gameId}`}
+                className="px-8 py-4 bg-ipl-gold text-black font-rajdhani font-bold text-xl rounded-full hover:bg-ipl-gold-light transition-all glow-gold hover:scale-105"
               >
-                Back to Home
-              </button>
-            </div>
+                View My Squad →
+              </Link>
+            )}
+            <button
+              onClick={() => navigate('/')}
+              className="px-8 py-4 glass font-rajdhani font-bold text-xl text-white/70 rounded-full hover:text-white transition-all"
+            >
+              Back to Home
+            </button>
           </div>
         </div>
       </div>
@@ -388,6 +431,13 @@ export default function AuctionRoom() {
               serverError={bidError}
             />
           </div>
+
+          {/* 🎙️ AI Commentary + 🔍 Scouting Report */}
+          <AICommentary
+            commentary={aiCommentary?.text}
+            insight={aiInsight?.insight}
+            commentaryColor={aiCommentary?.teamColor}
+          />
 
           {/* Auction log - center bottom */}
           <div className="h-48 lg:h-64">

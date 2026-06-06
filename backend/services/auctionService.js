@@ -6,6 +6,7 @@
 
 const { AuctionState, GameTeam, Player, Squad, Game, Team, User } = require('../models');
 const { getAIDecision, getBidIncrement } = require('./aiService');
+const { getAuctionCommentary, getPlayerScoutingReport, getSquadAnalysis } = require('./geminiService');
 
 const BID_TIMER_SECONDS   = 20;
 const RESET_TIMER_SECONDS = 12;
@@ -146,6 +147,11 @@ class AuctionService {
 
     // Schedule AI bids
     this._scheduleAIBids(gameIdStr);
+
+    // 🔍 Non-blocking: generate AI scouting report for this player
+    getPlayerScoutingReport(player.toJSON()).then((insight) => {
+      if (insight) this.emit(gameIdStr, 'ai-player-insight', { playerId: player.id, insight });
+    }).catch(() => {});
   }
 
   _getRandomTeamForDisplay(live) {
@@ -309,6 +315,14 @@ class AuctionService {
         player: currentPlayer.toJSON ? currentPlayer.toJSON() : currentPlayer,
         log: logEntry,
       });
+
+      // 🎙️ Non-blocking: generate AI commentary for unsold player
+      getAuctionCommentary(
+        currentPlayer.toJSON ? currentPlayer.toJSON() : currentPlayer,
+        { type: 'unsold' }
+      ).then((commentary) => {
+        if (commentary) this.emit(gameId, 'ai-commentary', { commentary, type: 'unsold' });
+      }).catch(() => {});
     } else {
       // Sold!
       const winnerState = live.teamStates.get(highestBidder);
@@ -362,6 +376,14 @@ class AuctionService {
         teamSquadSize: winnerState.squadSize,
         log: logEntry,
       });
+
+      // 🎙️ Non-blocking: generate AI commentary for sold player
+      getAuctionCommentary(
+        currentPlayer.toJSON ? currentPlayer.toJSON() : currentPlayer,
+        { type: 'sold', soldTo: winnerState.teamName, soldPrice: currentBid }
+      ).then((commentary) => {
+        if (commentary) this.emit(gameId, 'ai-commentary', { commentary, type: 'sold', teamColor: winnerState.teamColor });
+      }).catch(() => {});
     }
 
     // Short pause, then nominate next
@@ -424,6 +446,21 @@ class AuctionService {
         squadSize:    gt.squadSize,
       })),
     });
+
+    // 📊 Non-blocking: generate AI squad analysis for all teams
+    const squadAnalysisInput = finalGameTeams.map((gt) => ({
+      teamName:       gt.Team.name,
+      squadSize:      gt.squadSize,
+      purseRemaining: gt.purseRemaining,
+      overseasCount:  gt.overseasCount,
+      keyBuys:        live.log
+        .filter((l) => l.type === 'sold' && String(l.soldTo?.id) === String(gt.id))
+        .slice(0, 3)
+        .map((l) => l.player?.name),
+    }));
+    getSquadAnalysis(squadAnalysisInput).then((analysis) => {
+      if (analysis) this.emit(gameId, 'ai-squad-analysis', { analysis });
+    }).catch(() => {});
 
     // Clean up in-memory state after a delay
     setTimeout(() => this.liveGames.delete(String(gameId)), 60000);
