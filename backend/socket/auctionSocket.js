@@ -2,7 +2,7 @@
  * Socket.IO auction event handlers
  */
 const jwt = require('jsonwebtoken');
-const { User, GameTeam, Team, Game } = require('../models');
+const { User, GameTeam, Team, Game, AuctionState } = require('../models');
 const auctionService = require('../services/auctionService');
 
 function verifySocketToken(token) {
@@ -67,9 +67,17 @@ module.exports = function registerAuctionSocket(io) {
           if (!live) {
             console.log(`[Socket] Re-initializing lost in-memory state for game ${gameId}`);
             live = await auctionService.initGame(gameId);
-            // If it was in the middle of something, just nominate the next player to get things moving
+
             if (live) {
-              setTimeout(() => auctionService.nominateNextPlayer(gameId), 2000);
+              // Only resume nominating for TRUE server restarts (auction was already mid-flight).
+              // If the auction just started (status 'nominating'/'idle'), the host's
+              // start-auction socket event will call nominateNextPlayer — don't double-start.
+              const auctionState = await AuctionState.findOne({ gameId });
+              const midAuction = ['bidding', 'sold', 'unsold'].includes(auctionState?.status);
+              if (midAuction) {
+                console.log(`[Socket] True server restart detected — resuming auction for game ${gameId}`);
+                setTimeout(() => auctionService.nominateNextPlayer(gameId), 2000);
+              }
             }
           }
 
@@ -130,7 +138,7 @@ module.exports = function registerAuctionSocket(io) {
           return socket.emit('error', { message: 'Game not started via HTTP yet' });
         }
 
-        // Initialize in-memory state
+        // Initialize in-memory state (idempotent — safe if join-lobby already init'd it)
         console.log('[Socket] Initializing auction service for game', gameId);
         const live = await auctionService.initGame(gameId);
         if (!live) {
@@ -144,7 +152,9 @@ module.exports = function registerAuctionSocket(io) {
           teamStates: [...live.teamStates.values()],
         });
 
-        // Start nominating first player after a short delay
+        // Start nominating first player — this is the ONE authoritative place that
+        // kicks off the auction loop. join-lobby failsafe will NOT call this for
+        // freshly started games, so there's no double-nomination.
         setTimeout(() => {
           console.log('[Socket] Nominating first player for', gameId);
           auctionService.nominateNextPlayer(gameId);

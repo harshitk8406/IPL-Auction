@@ -30,8 +30,12 @@ class AuctionService {
 
   /**
    * Initialise in-memory state for a game when auction starts.
+   * Idempotent — returns the existing live state if already running.
    */
   async initGame(gameId) {
+    // Don't reinitialize if already running — prevents double-auction race condition
+    const existing = this.liveGames.get(String(gameId));
+    if (existing) return existing;
     const auctionState = await AuctionState.findOne({ gameId });
     if (!auctionState) return null;
 
