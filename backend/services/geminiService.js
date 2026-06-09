@@ -19,17 +19,21 @@ const API_KEY = process.env.GEMINI_API_KEY;
 let genAI = null;
 let model = null;
 
+// Models to try in order — gemini-2.5-flash works on free tier
+const MODEL_NAME = 'gemini-2.5-flash';
+
 function getModel() {
   if (!API_KEY) return null;
   if (!model) {
     genAI = new GoogleGenerativeAI(API_KEY);
     model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: MODEL_NAME,
       generationConfig: {
         maxOutputTokens: 200,
         temperature: 0.9,
       },
     });
+    console.log(`[Gemini] Initialized with model: ${MODEL_NAME}`);
   }
   return model;
 }
@@ -39,12 +43,18 @@ function getModel() {
  */
 async function callGemini(prompt) {
   const m = getModel();
-  if (!m) return null;
+  if (!m) {
+    console.warn('[Gemini] No API key set — skipping AI call');
+    return null;
+  }
   try {
+    console.log('[Gemini] Calling API...');
     const result = await m.generateContent(prompt);
-    return result.response.text().trim();
+    const text = result.response.text().trim();
+    console.log('[Gemini] Response:', text.slice(0, 80));
+    return text;
   } catch (err) {
-    console.warn('[Gemini] API error:', err.message);
+    console.warn('[Gemini] API error:', err.message.slice(0, 120));
     return null;
   }
 }

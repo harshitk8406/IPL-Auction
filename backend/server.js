@@ -5,14 +5,14 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
 
-const sequelize = require('./database');
-const { sequelize: _seq, ...models } = require('./models'); // ensure associations are registered
-const { Team, Player } = models;
+const { connectDB } = require('./database');
+require('./models'); // ensure all Mongoose models are registered
+const { Team, Player } = require('./models');
 const auctionService = require('./services/auctionService');
 const registerAuctionSocket = require('./socket/auctionSocket');
 
 const teamsData = require('./data/teams');
-const playersData = require('./data/players.json');
+const playersData = require('./data/ipl_2026_players.json');
 
 const app = express();
 const server = http.createServer(app);
@@ -55,17 +55,17 @@ app.get('*', (req, res) => {
 
 // ── Seed Database ─────────────────────────────────────────────────
 async function seedDatabase() {
-  const existingTeams = await Team.count();
+  const existingTeams = await Team.countDocuments();
   if (existingTeams === 0) {
     console.log('[Seed] Seeding 10 IPL teams...');
-    await Team.bulkCreate(teamsData);
+    await Team.insertMany(teamsData);
     console.log('[Seed] Teams seeded.');
   }
 
-  const existingPlayers = await Player.count();
+  const existingPlayers = await Player.countDocuments();
   if (existingPlayers === 0) {
     console.log('[Seed] Seeding players...');
-    await Player.bulkCreate(playersData);
+    await Player.insertMany(playersData);
     console.log(`[Seed] ${playersData.length} players seeded.`);
   }
 }
@@ -73,10 +73,7 @@ async function seedDatabase() {
 // ── Start Server ──────────────────────────────────────────────────
 async function startServer() {
   try {
-    // Connect and create tables (if they don't exist yet)
-    await sequelize.authenticate();
-    await sequelize.sync({ force: false });
-    console.log('[DB] SQLite connected and tables ready.');
+    await connectDB();
 
     await seedDatabase();
 

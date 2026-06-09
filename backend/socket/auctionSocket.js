@@ -2,9 +2,8 @@
  * Socket.IO auction event handlers
  */
 const jwt = require('jsonwebtoken');
-const { User, GameTeam, Team } = require('../models');
+const { User, GameTeam, Team, Game } = require('../models');
 const auctionService = require('../services/auctionService');
-const { Game } = require('../models');
 
 function verifySocketToken(token) {
   try {
@@ -20,7 +19,7 @@ module.exports = function registerAuctionSocket(io) {
     if (!token) return next(new Error('Authentication required'));
     const payload = verifySocketToken(token);
     if (!payload) return next(new Error('Invalid token'));
-    const user = await User.findByPk(payload.id, { attributes: ['id', 'username'] });
+    const user = await User.findById(payload.id).select('username');
     if (!user) return next(new Error('User not found'));
     socket.user = user;
     next();
@@ -38,31 +37,27 @@ module.exports = function registerAuctionSocket(io) {
         socket.join(room);
         socket.gameId = room;
 
-        const game = await Game.findByPk(gameId);
+        const game = await Game.findById(gameId);
         if (!game) return socket.emit('error', { message: 'Game not found' });
 
-        const gameTeams = await GameTeam.findAll({
-          where: { gameId },
-          include: [
-            { model: Team, as: 'Team' },
-            { model: User, as: 'User', attributes: ['id', 'username'] },
-          ],
-          order: [['teamId', 'ASC']],
-        });
+        const gameTeams = await GameTeam.find({ gameId })
+          .populate('teamId')
+          .populate('userId', 'id username')
+          .sort({ teamId: 1 });
 
         // Send current lobby state to the joining user
         socket.emit('lobby-state', {
-          game: { id: game.id, lobbyCode: game.lobbyCode, status: game.status, hostUserId: game.hostUserId },
+          game: { id: game._id, lobbyCode: game.lobbyCode, status: game.status, hostUserId: game.hostUserId },
           gameTeams: gameTeams.map(serializeGameTeam),
         });
 
         // Announce to room
-        io.to(String(gameId)).emit('user-joined', { username: socket.user.username, userId: socket.user.id });
+        io.to(String(gameId)).emit('user-joined', { username: socket.user.username, userId: socket.user._id });
 
         // If game is already in auction, send current state
         if (game.status === 'auction') {
           let live = auctionService.getLiveState(gameId);
-          
+
           // Failsafe: if server restarted, in-memory state is lost. Re-initialize it.
           if (!live) {
             console.log(`[Socket] Re-initializing lost in-memory state for game ${gameId}`);
@@ -97,17 +92,14 @@ module.exports = function registerAuctionSocket(io) {
     // ── TEAM SELECTED ────────────────────────────────────────────
     socket.on('team-selected', async ({ gameId, teamId, gameTeamId }) => {
       try {
-        const gameTeam = await GameTeam.findByPk(gameTeamId, {
-          include: [
-            { model: Team, as: 'Team' },
-            { model: User, as: 'User', attributes: ['id', 'username'] },
-          ],
-        });
+        const gameTeam = await GameTeam.findById(gameTeamId)
+          .populate('teamId')
+          .populate('userId', 'id username');
         if (!gameTeam) return;
 
         io.to(String(gameId)).emit('team-selected', {
           gameTeam: serializeGameTeam(gameTeam),
-          userId: socket.user.id,
+          userId: socket.user._id,
           username: socket.user.username,
         });
       } catch (err) {
@@ -119,12 +111,12 @@ module.exports = function registerAuctionSocket(io) {
     socket.on('start-auction', async ({ gameId }) => {
       console.log(`[Socket] Received start-auction for gameId: ${gameId}`);
       try {
-        const game = await Game.findByPk(gameId);
+        const game = await Game.findById(gameId);
         if (!game) {
           console.log('[Socket] Game not found');
           return socket.emit('error', { message: 'Game not found' });
         }
-        if (game.hostUserId !== socket.user.id) {
+        if (String(game.hostUserId) !== String(socket.user._id)) {
           console.log('[Socket] Only host can start');
           return socket.emit('error', { message: 'Only host can start' });
         }
@@ -166,9 +158,9 @@ module.exports = function registerAuctionSocket(io) {
         }
 
         // Verify user owns this gameTeam
-        const gameTeam = await GameTeam.findByPk(gameTeamId);
+        const gameTeam = await GameTeam.findById(gameTeamId);
         if (!gameTeam) return socket.emit('error', { message: 'Team not found' });
-        if (gameTeam.userId !== socket.user.id) {
+        if (String(gameTeam.userId) !== String(socket.user._id)) {
           return socket.emit('error', { message: 'Not your team' });
         }
 
@@ -188,7 +180,7 @@ module.exports = function registerAuctionSocket(io) {
       if (socket.gameId) {
         socket.to(String(socket.gameId)).emit('user-left', {
           username: socket.user?.username,
-          userId: socket.user?.id,
+          userId: socket.user?._id,
         });
       }
     });
@@ -197,22 +189,22 @@ module.exports = function registerAuctionSocket(io) {
 
 function serializeGameTeam(gt) {
   return {
-    id: gt.id,
-    teamId: gt.teamId,
-    userId: gt.userId,
+    id: gt._id,
+    teamId: gt.teamId?._id ?? gt.teamId,
+    userId: gt.userId?._id ?? gt.userId,
     isAI: gt.isAI,
     purseRemaining: gt.purseRemaining,
     squadSize: gt.squadSize,
     overseasCount: gt.overseasCount,
-    Team: gt.Team ? {
-      id: gt.Team.id,
-      name: gt.Team.name,
-      shortName: gt.Team.shortName,
-      primaryColor: gt.Team.primaryColor,
-      secondaryColor: gt.Team.secondaryColor,
-      city: gt.Team.city,
-      logoInitials: gt.Team.logoInitials,
+    Team: gt.teamId ? {
+      id: gt.teamId._id,
+      name: gt.teamId.name,
+      shortName: gt.teamId.shortName,
+      primaryColor: gt.teamId.primaryColor,
+      secondaryColor: gt.teamId.secondaryColor,
+      city: gt.teamId.city,
+      logoInitials: gt.teamId.logoInitials,
     } : null,
-    User: gt.User ? { id: gt.User.id, username: gt.User.username } : null,
+    User: gt.userId ? { id: gt.userId._id, username: gt.userId.username } : null,
   };
 }

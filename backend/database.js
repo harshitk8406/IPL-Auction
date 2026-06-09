@@ -1,10 +1,9 @@
-const { Sequelize } = require('sequelize');
-const path = require('path');
+const mongoose = require('mongoose');
 
-const sequelize = new Sequelize({
-  dialect: 'sqlite',
-  storage: process.env.DB_PATH || path.join(__dirname, 'data.sqlite'),
-  logging: false, // set to console.log to debug SQL queries
-});
+async function connectDB() {
+  const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/ipl_auction';
+  await mongoose.connect(uri);
+  console.log('[DB] MongoDB connected and ready.');
+}
 
-module.exports = sequelize;
+module.exports = { connectDB, mongoose };

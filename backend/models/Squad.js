@@ -1,24 +1,14 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../database');
+const mongoose = require('mongoose');
 
 // A player acquired by a team in a specific game
-const Squad = sequelize.define('Squad', {
-  gameId: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
+const squadSchema = new mongoose.Schema(
+  {
+    gameId: { type: mongoose.Schema.Types.ObjectId, ref: 'Game', required: true },
+    gameTeamId: { type: mongoose.Schema.Types.ObjectId, ref: 'GameTeam', required: true },
+    playerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Player', required: true },
+    soldPrice: { type: Number, required: true }, // in Lakhs
   },
-  gameTeamId: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-  },
-  playerId: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-  },
-  soldPrice: {
-    type: DataTypes.INTEGER, // in Lakhs
-    allowNull: false,
-  },
-}, { tableName: 'squads', timestamps: true });
+  { timestamps: true }
+);
 
-module.exports = Squad;
+module.exports = mongoose.model('Squad', squadSchema);

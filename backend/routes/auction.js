@@ -8,25 +8,21 @@ const router = express.Router();
 // GET /api/auction/:gameId — Get current auction state
 router.get('/:gameId', authenticate, async (req, res) => {
   try {
-    const state = await AuctionState.findOne({ where: { gameId: req.params.gameId } });
+    const state = await AuctionState.findOne({ gameId: req.params.gameId });
     if (!state) return res.status(404).json({ error: 'Auction not found' });
 
-    const gameTeams = await GameTeam.findAll({
-      where: { gameId: req.params.gameId },
-      include: [
-        { model: Team, as: 'Team' },
-        { model: User, as: 'User', attributes: ['id', 'username'] },
-      ],
-    });
+    const gameTeams = await GameTeam.find({ gameId: req.params.gameId })
+      .populate('teamId')
+      .populate('userId', 'id username');
 
     let currentPlayer = null;
     if (state.currentPlayerId) {
-      currentPlayer = await Player.findByPk(state.currentPlayerId);
+      currentPlayer = await Player.findById(state.currentPlayerId);
     }
 
     res.json({
       auction: {
-        id: state.id,
+        id: state._id,
         gameId: state.gameId,
         status: state.status,
         currentPlayer,
@@ -34,8 +30,8 @@ router.get('/:gameId', authenticate, async (req, res) => {
         highestBidderGameTeamId: state.highestBidderGameTeamId,
         timerEnd: state.timerEnd,
         round: state.round,
-        log: state.logJson,           // auto-parsed array via getter
-        remainingPlayers: state.playerPoolJson.length, // auto-parsed array via getter
+        log: state.logJson,
+        remainingPlayers: state.playerPoolJson.length,
       },
       gameTeams,
     });

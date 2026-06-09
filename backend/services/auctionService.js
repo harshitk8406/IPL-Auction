@@ -1,7 +1,7 @@
 /**
  * Auction Service — Core auction state management
  * Uses in-memory state (Map) per game for speed,
- * persisting key events to SQLite via Sequelize.
+ * persisting key events to MongoDB via Mongoose.
  */
 
 const { AuctionState, GameTeam, Player, Squad, Game, Team, User } = require('../models');
@@ -32,25 +32,21 @@ class AuctionService {
    * Initialise in-memory state for a game when auction starts.
    */
   async initGame(gameId) {
-    const auctionState = await AuctionState.findOne({ where: { gameId } });
+    const auctionState = await AuctionState.findOne({ gameId });
     if (!auctionState) return null;
 
-    const gameTeams = await GameTeam.findAll({
-      where: { gameId },
-      include: [
-        { model: Team, as: 'Team' },
-        { model: User, as: 'User', attributes: ['id', 'username'] },
-      ],
-    });
+    const gameTeams = await GameTeam.find({ gameId })
+      .populate('teamId')
+      .populate('userId', 'id username');
 
     const teamStates = new Map();
     for (const gt of gameTeams) {
-      teamStates.set(String(gt.id), {
-        id: String(gt.id),
-        teamId: gt.Team.id,
-        teamName: gt.Team.shortName,
-        teamColor: gt.Team.primaryColor,
-        userId: gt.User ? String(gt.User.id) : null,
+      teamStates.set(String(gt._id), {
+        id: String(gt._id),
+        teamId: gt.teamId._id,
+        teamName: gt.teamId.shortName,
+        teamColor: gt.teamId.primaryColor,
+        userId: gt.userId ? String(gt.userId._id) : null,
         isAI: gt.isAI,
         purseRemaining: gt.purseRemaining,
         squadSize: gt.squadSize,
@@ -59,7 +55,7 @@ class AuctionService {
       });
     }
 
-    // playerPoolJson getter returns a parsed array already
+    // playerPoolJson is a native array already
     const live = {
       gameId: String(gameId),
       status: 'nominating',
@@ -104,7 +100,7 @@ class AuctionService {
     if (allFull) return this._completeAuction(gameIdStr);
 
     const playerId = live.playerPool.shift();
-    const player = await Player.findByPk(playerId);
+    const player = await Player.findById(playerId);
     if (!player) return this.nominateNextPlayer(gameIdStr); // skip missing player
 
     live.currentPlayer = player;
@@ -117,15 +113,15 @@ class AuctionService {
     live.timerEnd  = timerEnd;
 
     // Persist to DB
-    const auctionState = await AuctionState.findOne({ where: { gameId: gameIdStr } });
+    const auctionState = await AuctionState.findOne({ gameId: gameIdStr });
     if (auctionState) {
       auctionState.status                  = 'bidding';
-      auctionState.currentPlayerId         = player.id;
+      auctionState.currentPlayerId         = player._id;
       auctionState.currentBid              = player.basePrice;
       auctionState.highestBidderGameTeamId = null;
       auctionState.timerEnd                = timerEnd;
       auctionState.round                   = live.round;
-      auctionState.playerPoolJson          = live.playerPool; // setter auto-serialises
+      auctionState.playerPoolJson          = live.playerPool;
       await auctionState.save();
     }
 
@@ -133,7 +129,7 @@ class AuctionService {
 
     console.log(`[AuctionService] Emitting player-nominated for ${player.name} to gameId ${gameIdStr}`);
     this.emit(gameIdStr, 'player-nominated', {
-      player: player.toJSON(),
+      player: player.toObject(),
       currentBid: player.basePrice,
       timerEnd: timerEnd.toISOString(),
       nominatingTeam,
@@ -149,8 +145,8 @@ class AuctionService {
     this._scheduleAIBids(gameIdStr);
 
     // 🔍 Non-blocking: generate AI scouting report for this player
-    getPlayerScoutingReport(player.toJSON()).then((insight) => {
-      if (insight) this.emit(gameIdStr, 'ai-player-insight', { playerId: player.id, insight });
+    getPlayerScoutingReport(player.toObject()).then((insight) => {
+      if (insight) this.emit(gameIdStr, 'ai-player-insight', { playerId: player._id, insight });
     }).catch(() => {});
   }
 
@@ -180,7 +176,7 @@ class AuctionService {
     if (amount <= live.currentBid) return { success: false, error: 'Bid must exceed current bid' };
     if (amount > teamState.purseRemaining) return { success: false, error: 'Insufficient purse' };
 
-    // Overseas player limit (max 8 per squad) — mirrors the AI check in aiService.js
+    // Overseas player limit (max 8 per squad)
     const MAX_OVERSEAS = 8;
     if (live.currentPlayer.nationality === 'Overseas' && teamState.overseasCount >= MAX_OVERSEAS) {
       return { success: false, error: `Overseas limit reached (${MAX_OVERSEAS} overseas players max)` };
@@ -304,7 +300,7 @@ class AuctionService {
       // No bids — player unsold
       const logEntry = {
         type: 'unsold',
-        player: currentPlayer.toJSON ? currentPlayer.toJSON() : currentPlayer,
+        player: currentPlayer.toObject ? currentPlayer.toObject() : currentPlayer,
         timestamp: new Date().toISOString(),
       };
       live.log.unshift(logEntry);
@@ -312,13 +308,13 @@ class AuctionService {
       await this._persistAuctionState(gameId, live, 'unsold');
 
       this.emit(gameId, 'player-unsold', {
-        player: currentPlayer.toJSON ? currentPlayer.toJSON() : currentPlayer,
+        player: currentPlayer.toObject ? currentPlayer.toObject() : currentPlayer,
         log: logEntry,
       });
 
       // 🎙️ Non-blocking: generate AI commentary for unsold player
       getAuctionCommentary(
-        currentPlayer.toJSON ? currentPlayer.toJSON() : currentPlayer,
+        currentPlayer.toObject ? currentPlayer.toObject() : currentPlayer,
         { type: 'unsold' }
       ).then((commentary) => {
         if (commentary) this.emit(gameId, 'ai-commentary', { commentary, type: 'unsold' });
@@ -338,19 +334,16 @@ class AuctionService {
 
       // Persist to DB
       try {
-        await GameTeam.update(
-          {
-            purseRemaining: winnerState.purseRemaining,
-            squadSize:      winnerState.squadSize,
-            overseasCount:  winnerState.overseasCount,
-          },
-          { where: { id: highestBidder } }
-        );
+        await GameTeam.findByIdAndUpdate(highestBidder, {
+          purseRemaining: winnerState.purseRemaining,
+          squadSize:      winnerState.squadSize,
+          overseasCount:  winnerState.overseasCount,
+        });
 
         await Squad.create({
           gameId,
           gameTeamId: highestBidder,
-          playerId:   currentPlayer.id,
+          playerId:   currentPlayer._id,
           soldPrice:  currentBid,
         });
       } catch (e) {
@@ -359,7 +352,7 @@ class AuctionService {
 
       const logEntry = {
         type: 'sold',
-        player: currentPlayer.toJSON ? currentPlayer.toJSON() : currentPlayer,
+        player: currentPlayer.toObject ? currentPlayer.toObject() : currentPlayer,
         soldTo: { id: highestBidder, name: winnerState.teamName, color: winnerState.teamColor },
         soldPrice: currentBid,
         timestamp: new Date().toISOString(),
@@ -369,7 +362,7 @@ class AuctionService {
       await this._persistAuctionState(gameId, live, 'sold');
 
       this.emit(gameId, 'player-sold', {
-        player: currentPlayer.toJSON ? currentPlayer.toJSON() : currentPlayer,
+        player: currentPlayer.toObject ? currentPlayer.toObject() : currentPlayer,
         soldTo: { id: highestBidder, name: winnerState.teamName, color: winnerState.teamColor },
         soldPrice: currentBid,
         teamPurse: winnerState.purseRemaining,
@@ -379,7 +372,7 @@ class AuctionService {
 
       // 🎙️ Non-blocking: generate AI commentary for sold player
       getAuctionCommentary(
-        currentPlayer.toJSON ? currentPlayer.toJSON() : currentPlayer,
+        currentPlayer.toObject ? currentPlayer.toObject() : currentPlayer,
         { type: 'sold', soldTo: winnerState.teamName, soldPrice: currentBid }
       ).then((commentary) => {
         if (commentary) this.emit(gameId, 'ai-commentary', { commentary, type: 'sold', teamColor: winnerState.teamColor });
@@ -392,14 +385,14 @@ class AuctionService {
 
   async _persistAuctionState(gameId, live, status) {
     try {
-      const auctionState = await AuctionState.findOne({ where: { gameId } });
+      const auctionState = await AuctionState.findOne({ gameId });
       if (auctionState) {
         auctionState.status                  = status;
-        auctionState.currentPlayerId         = live.currentPlayer?.id || null;
+        auctionState.currentPlayerId         = live.currentPlayer?._id || null;
         auctionState.currentBid              = live.currentBid;
         auctionState.highestBidderGameTeamId = live.highestBidder || null;
-        auctionState.logJson                 = live.log.slice(0, 100); // setter auto-serialises
-        auctionState.playerPoolJson          = live.playerPool;         // setter auto-serialises
+        auctionState.logJson                 = live.log.slice(0, 100);
+        auctionState.playerPoolJson          = live.playerPool;
         await auctionState.save();
       }
     } catch (e) {
@@ -416,8 +409,8 @@ class AuctionService {
     this._clearAIPendingBids(live);
 
     try {
-      await Game.update({ status: 'complete' }, { where: { id: gameId } });
-      const auctionState = await AuctionState.findOne({ where: { gameId } });
+      await Game.findByIdAndUpdate(gameId, { status: 'complete' });
+      const auctionState = await AuctionState.findOne({ gameId });
       if (auctionState) {
         auctionState.status = 'complete';
         await auctionState.save();
@@ -426,21 +419,17 @@ class AuctionService {
       console.error('Complete auction persist error:', e);
     }
 
-    const finalGameTeams = await GameTeam.findAll({
-      where: { gameId },
-      include: [
-        { model: Team, as: 'Team' },
-        { model: User, as: 'User', attributes: ['id', 'username'] },
-      ],
-    });
+    const finalGameTeams = await GameTeam.find({ gameId })
+      .populate('teamId')
+      .populate('userId', 'id username');
 
     this.emit(gameId, 'auction-complete', {
       gameTeams: finalGameTeams.map((gt) => ({
-        id:           gt.id,
-        teamName:     gt.Team.name,
-        shortName:    gt.Team.shortName,
-        primaryColor: gt.Team.primaryColor,
-        userId:       gt.User?.id || null,
+        id:           gt._id,
+        teamName:     gt.teamId.name,
+        shortName:    gt.teamId.shortName,
+        primaryColor: gt.teamId.primaryColor,
+        userId:       gt.userId?._id || null,
         isAI:         gt.isAI,
         purseRemaining: gt.purseRemaining,
         squadSize:    gt.squadSize,
@@ -449,12 +438,12 @@ class AuctionService {
 
     // 📊 Non-blocking: generate AI squad analysis for all teams
     const squadAnalysisInput = finalGameTeams.map((gt) => ({
-      teamName:       gt.Team.name,
+      teamName:       gt.teamId.name,
       squadSize:      gt.squadSize,
       purseRemaining: gt.purseRemaining,
       overseasCount:  gt.overseasCount,
       keyBuys:        live.log
-        .filter((l) => l.type === 'sold' && String(l.soldTo?.id) === String(gt.id))
+        .filter((l) => l.type === 'sold' && String(l.soldTo?.id) === String(gt._id))
         .slice(0, 3)
         .map((l) => l.player?.name),
     }));
