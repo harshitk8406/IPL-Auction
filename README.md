@@ -2,7 +2,7 @@
 
 A full-stack web application that simulates the Indian Premier League (IPL) player auction — complete with team management, real-time bidding, player rosters, and budget tracking.
 
-**Live Demo →** *https://ipl-auction-jv77.onrender.com/*
+**Live Demo →** *https://ipl-auction-d0yf.onrender.com*
 
 ---
 
