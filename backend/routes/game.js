@@ -11,6 +11,43 @@ function generateLobbyCode() {
   return code;
 }
 
+// Serialize a game document to a plain object with string IDs
+function serializeGame(game) {
+  return {
+    id: String(game._id),
+    lobbyCode: game.lobbyCode,
+    status: game.status,
+    hostUserId: String(game.hostUserId),
+    maxPlayers: game.maxPlayers,
+  };
+}
+
+// Serialize a populated GameTeam document
+function serializeGameTeam(gt) {
+  const team = gt.teamId;
+  const user = gt.userId;
+  return {
+    id: String(gt._id),
+    gameId: String(gt.gameId),
+    teamId: team ? String(team._id) : String(gt.teamId),
+    userId: user ? String(user._id) : (gt.userId ? String(gt.userId) : null),
+    isAI: gt.isAI,
+    purseRemaining: gt.purseRemaining,
+    squadSize: gt.squadSize,
+    overseasCount: gt.overseasCount,
+    Team: team ? {
+      id: String(team._id),
+      name: team.name,
+      shortName: team.shortName,
+      primaryColor: team.primaryColor,
+      secondaryColor: team.secondaryColor,
+      city: team.city,
+      logoInitials: team.logoInitials,
+    } : null,
+    User: user ? { id: String(user._id), username: user.username } : null,
+  };
+}
+
 // POST /api/game/create — Host creates a new lobby
 router.post('/create', authenticate, async (req, res) => {
   try {
@@ -43,14 +80,7 @@ router.post('/create', authenticate, async (req, res) => {
     // Create empty auction state
     await AuctionState.create({ gameId: game._id });
 
-    res.status(201).json({
-      game: {
-        id: game._id,
-        lobbyCode: game.lobbyCode,
-        status: game.status,
-        hostUserId: game.hostUserId,
-      },
-    });
+    res.status(201).json({ game: serializeGame(game) });
   } catch (err) {
     console.error('Create game error:', err);
     res.status(500).json({ error: 'Failed to create game' });
@@ -67,14 +97,7 @@ router.post('/join', authenticate, async (req, res) => {
     if (!game) return res.status(404).json({ error: 'Lobby not found' });
     if (game.status !== 'waiting') return res.status(400).json({ error: 'Game already started' });
 
-    res.json({
-      game: {
-        id: game._id,
-        lobbyCode: game.lobbyCode,
-        status: game.status,
-        hostUserId: game.hostUserId,
-      },
-    });
+    res.json({ game: serializeGame(game) });
   } catch (err) {
     console.error('Join game error:', err);
     res.status(500).json({ error: 'Failed to join game' });
@@ -88,11 +111,13 @@ router.get('/:gameId/state', authenticate, async (req, res) => {
     if (!game) return res.status(404).json({ error: 'Game not found' });
 
     const gameTeams = await GameTeam.find({ gameId: game._id })
-      .populate('teamId', null, 'Team')
-      .populate('userId', 'id username')
-      .sort({ teamId: 1 });
+      .populate('teamId')
+      .populate('userId', 'username');
 
-    res.json({ game, gameTeams });
+    res.json({
+      game: serializeGame(game),
+      gameTeams: gameTeams.map(serializeGameTeam),
+    });
   } catch (err) {
     console.error('Game state error:', err);
     res.status(500).json({ error: 'Failed to load game state' });
@@ -104,7 +129,7 @@ router.get('/:gameId', authenticate, async (req, res) => {
   try {
     const game = await Game.findById(req.params.gameId);
     if (!game) return res.status(404).json({ error: 'Game not found' });
-    res.json({ game });
+    res.json({ game: serializeGame(game) });
   } catch (err) {
     res.status(500).json({ error: 'Failed to load game' });
   }
@@ -135,7 +160,7 @@ router.post('/:gameId/start', authenticate, async (req, res) => {
       await auctionState.save();
     }
 
-    res.json({ success: true, game });
+    res.json({ success: true, game: serializeGame(game) });
   } catch (err) {
     console.error('Start game error:', err);
     res.status(500).json({ error: 'Failed to start game' });

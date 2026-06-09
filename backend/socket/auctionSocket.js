@@ -47,7 +47,12 @@ module.exports = function registerAuctionSocket(io) {
 
         // Send current lobby state to the joining user
         socket.emit('lobby-state', {
-          game: { id: game._id, lobbyCode: game.lobbyCode, status: game.status, hostUserId: game.hostUserId },
+          game: {
+            id: String(game._id),
+            lobbyCode: game.lobbyCode,
+            status: game.status,
+            hostUserId: String(game.hostUserId),
+          },
           gameTeams: gameTeams.map(serializeGameTeam),
         });
 

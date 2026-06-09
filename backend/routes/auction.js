@@ -5,6 +5,31 @@ const auctionService = require('../services/auctionService');
 
 const router = express.Router();
 
+function serializeGameTeam(gt) {
+  const team = gt.teamId;
+  const user = gt.userId;
+  return {
+    id: String(gt._id),
+    gameId: String(gt.gameId),
+    teamId: team ? String(team._id) : String(gt.teamId),
+    userId: user ? String(user._id) : (gt.userId ? String(gt.userId) : null),
+    isAI: gt.isAI,
+    purseRemaining: gt.purseRemaining,
+    squadSize: gt.squadSize,
+    overseasCount: gt.overseasCount,
+    Team: team ? {
+      id: String(team._id),
+      name: team.name,
+      shortName: team.shortName,
+      primaryColor: team.primaryColor,
+      secondaryColor: team.secondaryColor,
+      city: team.city,
+      logoInitials: team.logoInitials,
+    } : null,
+    User: user ? { id: String(user._id), username: user.username } : null,
+  };
+}
+
 // GET /api/auction/:gameId — Get current auction state
 router.get('/:gameId', authenticate, async (req, res) => {
   try {
@@ -13,27 +38,40 @@ router.get('/:gameId', authenticate, async (req, res) => {
 
     const gameTeams = await GameTeam.find({ gameId: req.params.gameId })
       .populate('teamId')
-      .populate('userId', 'id username');
+      .populate('userId', 'username');
 
     let currentPlayer = null;
     if (state.currentPlayerId) {
-      currentPlayer = await Player.findById(state.currentPlayerId);
+      const p = await Player.findById(state.currentPlayerId);
+      if (p) {
+        currentPlayer = {
+          id: String(p._id),
+          name: p.name,
+          role: p.role,
+          nationality: p.nationality,
+          basePrice: p.basePrice,
+          battingStyle: p.battingStyle,
+          bowlingStyle: p.bowlingStyle,
+        };
+      }
     }
 
     res.json({
       auction: {
-        id: state._id,
-        gameId: state.gameId,
+        id: String(state._id),
+        gameId: String(state.gameId),
         status: state.status,
         currentPlayer,
         currentBid: state.currentBid,
-        highestBidderGameTeamId: state.highestBidderGameTeamId,
+        highestBidderGameTeamId: state.highestBidderGameTeamId
+          ? String(state.highestBidderGameTeamId)
+          : null,
         timerEnd: state.timerEnd,
         round: state.round,
         log: state.logJson,
         remainingPlayers: state.playerPoolJson.length,
       },
-      gameTeams,
+      gameTeams: gameTeams.map(serializeGameTeam),
     });
   } catch (err) {
     console.error('Auction state error:', err);
