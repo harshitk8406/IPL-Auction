@@ -67,7 +67,10 @@ router.post('/login', async (req, res) => {
 
 // GET /api/auth/me
 router.get('/me', authenticate, async (req, res) => {
-  res.json({ user: req.user });
+  const u = req.user;
+  res.json({
+    user: { id: String(u._id), username: u.username, email: u.email },
+  });
 });
 
 module.exports = router;
