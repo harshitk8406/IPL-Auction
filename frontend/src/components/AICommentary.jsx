@@ -3,9 +3,14 @@ import { Sparkles, Mic } from 'lucide-react';
 
 /**
  * AICommentary — animated AI commentary and scouting insight display.
- * Shows commentary text with a typewriter reveal and auto-fades.
+ *
+ * Props:
+ *   commentary      — sold/unsold one-liner (null to suppress)
+ *   insight         — scouting report text (null to suppress)
+ *   commentaryColor — accent color for commentary bubble
+ *   persistInsight  — if true, insight stays visible until replaced (no 30s fade)
  */
-export default function AICommentary({ commentary, insight, commentaryColor }) {
+export default function AICommentary({ commentary, insight, commentaryColor, persistInsight = false }) {
   const [displayedCommentary, setDisplayedCommentary] = useState('');
   const [displayedInsight, setDisplayedInsight]       = useState('');
   const [showCommentary, setShowCommentary]           = useState(false);
@@ -28,9 +33,11 @@ export default function AICommentary({ commentary, insight, commentaryColor }) {
     clearTimeout(insightTimerRef.current);
     setDisplayedInsight(insight);
     setShowInsight(true);
-    // Insights stay visible until next player is nominated or 30s pass
-    insightTimerRef.current = setTimeout(() => setShowInsight(false), 30000);
-  }, [insight]);
+    // If persistInsight, keep until next player is nominated (insight prop changes)
+    if (!persistInsight) {
+      insightTimerRef.current = setTimeout(() => setShowInsight(false), 30000);
+    }
+  }, [insight, persistInsight]);
 
   // Cleanup on unmount
   useEffect(() => () => {

@@ -202,7 +202,7 @@ export default function AuctionRoom() {
                 <Sparkles size={18} className="text-purple-400" />
                 <h2 className="font-rajdhani font-bold text-xl text-white/80">AI Squad Analysis</h2>
                 <span className="text-[10px] text-white/30 font-inter ml-2 px-2 py-0.5 glass rounded-full">
-                  Powered by Gemini
+                  Powered by Groq
                 </span>
               </div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -432,12 +432,14 @@ export default function AuctionRoom() {
             />
           </div>
 
-          {/* 🎙️ AI Commentary + 🔍 Scouting Report */}
-          <AICommentary
-            commentary={aiCommentary?.text}
-            insight={aiInsight?.insight}
-            commentaryColor={aiCommentary?.teamColor}
-          />
+          {/* 🎙️ AI Commentary (sold/unsold one-liner — stays in center) */}
+          {aiCommentary?.text && (
+            <AICommentary
+              commentary={aiCommentary?.text}
+              insight={null}
+              commentaryColor={aiCommentary?.teamColor}
+            />
+          )}
 
           {/* Auction log - center bottom */}
           <div className="h-48 lg:h-64">
@@ -445,8 +447,17 @@ export default function AuctionRoom() {
           </div>
         </div>
 
-        {/* ─── RIGHT: Teams List ─── */}
+        {/* ─── RIGHT: AI Scout + Teams List ─── */}
         <div className="flex flex-col gap-3">
+
+          {/* 🔍 AI Scout Report — always visible at top of sidebar */}
+          <AICommentary
+            commentary={null}
+            insight={aiInsight?.insight}
+            commentaryColor={null}
+            persistInsight
+          />
+
           <div className="flex items-center gap-2 mb-1">
             <Users size={16} className="text-ipl-gold" />
             <h3 className="font-rajdhani font-bold text-base text-white/80">
