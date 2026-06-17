@@ -1,6 +1,6 @@
 /**
- * Gemini AI Service
- * Uses Google Gemini 2.0 Flash (free tier) for three features:
+ * Groq AI Service (replaces Gemini)
+ * Uses Groq's ultra-fast inference (llama-3.3-70b-versatile) for three features:
  *   1. Live auction commentary after each sold/unsold event
  *   2. Player scouting report when a player is nominated
  *   3. Squad analysis at auction completion
@@ -8,53 +8,51 @@
  * All functions are non-blocking — they return a promise but the caller
  * never awaits them, so the auction flow is never delayed.
  *
- * Free tier: 15 RPM, 1M tokens/day — no billing required.
- * Get your key at: https://aistudio.google.com/app/apikey
+ * Groq free tier: very generous rate limits, no billing required.
+ * API is OpenAI-compatible — uses fetch with Authorization header.
  */
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-
-const API_KEY = process.env.GEMINI_API_KEY;
-
-let genAI = null;
-let model = null;
-
-// Models to try in order — gemini-2.5-flash works on free tier
-const MODEL_NAME = 'gemini-2.5-flash';
-
-function getModel() {
-  if (!API_KEY) return null;
-  if (!model) {
-    genAI = new GoogleGenerativeAI(API_KEY);
-    model = genAI.getGenerativeModel({
-      model: MODEL_NAME,
-      generationConfig: {
-        maxOutputTokens: 200,
-        temperature: 0.9,
-      },
-    });
-    console.log(`[Gemini] Initialized with model: ${MODEL_NAME}`);
-  }
-  return model;
-}
+const API_KEY = process.env.GROQ_API_KEY;
+const GROQ_BASE_URL = 'https://api.groq.com/openai/v1';
+const MODEL_NAME = 'llama-3.3-70b-versatile';
 
 /**
- * Safely call Gemini — returns null if key is missing or call fails.
+ * Safely call Groq — returns null if key is missing or call fails.
  */
-async function callGemini(prompt) {
-  const m = getModel();
-  if (!m) {
-    console.warn('[Gemini] No API key set — skipping AI call');
+async function callGroq(prompt, maxTokens = 200) {
+  if (!API_KEY) {
+    console.warn('[Groq] No API key set — skipping AI call');
     return null;
   }
+
   try {
-    console.log('[Gemini] Calling API...');
-    const result = await m.generateContent(prompt);
-    const text = result.response.text().trim();
-    console.log('[Gemini] Response:', text.slice(0, 80));
+    console.log('[Groq] Calling API...');
+    const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: MODEL_NAME,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        temperature: 0.9,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.warn('[Groq] API error:', errText.slice(0, 120));
+      return null;
+    }
+
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content?.trim() || null;
+    console.log('[Groq] Response:', text?.slice(0, 80));
     return text;
   } catch (err) {
-    console.warn('[Gemini] API error:', err.message.slice(0, 120));
+    console.warn('[Groq] Fetch error:', err.message.slice(0, 120));
     return null;
   }
 }
@@ -83,7 +81,7 @@ Base price: ₹${(basePrice / 100).toFixed(2)} Crore
 Tone: Surprised or sympathetic. Cricket-commentator style. No hashtags.`;
   }
 
-  return callGemini(prompt);
+  return callGroq(prompt, 80);
 }
 
 /**
@@ -102,7 +100,7 @@ Nationality: ${nationality}
 Base Price: ₹${crore} Crore
 Be specific to cricket. Highlight their likely value and what kind of team would want them. No hashtags or emojis.`;
 
-  return callGemini(prompt);
+  return callGroq(prompt, 120);
 }
 
 /**
@@ -128,7 +126,7 @@ ${teamsText}
 Respond ONLY with valid JSON array, no markdown, no explanation:
 [{"teamName":"...","grade":"A","verdict":"..."},...]`;
 
-  const raw = await callGemini(prompt);
+  const raw = await callGroq(prompt, 400);
   if (!raw) return null;
 
   try {
@@ -136,7 +134,7 @@ Respond ONLY with valid JSON array, no markdown, no explanation:
     const cleaned = raw.replace(/```json|```/g, '').trim();
     return JSON.parse(cleaned);
   } catch {
-    console.warn('[Gemini] Squad analysis parse error:', raw);
+    console.warn('[Groq] Squad analysis parse error:', raw);
     return null;
   }
 }
