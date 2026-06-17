@@ -432,14 +432,7 @@ export default function AuctionRoom() {
             />
           </div>
 
-          {/* 🎙️ AI Commentary (sold/unsold one-liner — stays in center) */}
-          {aiCommentary?.text && (
-            <AICommentary
-              commentary={aiCommentary?.text}
-              insight={null}
-              commentaryColor={aiCommentary?.teamColor}
-            />
-          )}
+
 
           {/* Auction log - center bottom */}
           <div className="h-48 lg:h-64">
@@ -450,11 +443,11 @@ export default function AuctionRoom() {
         {/* ─── RIGHT: AI Scout + Teams List ─── */}
         <div className="flex flex-col gap-3">
 
-          {/* 🔍 AI Scout Report — always visible at top of sidebar */}
+          {/* 🎙️ AI Commentary + 🔍 AI Scout Report — always visible in sidebar */}
           <AICommentary
-            commentary={null}
+            commentary={aiCommentary?.text}
             insight={aiInsight?.insight}
-            commentaryColor={null}
+            commentaryColor={aiCommentary?.teamColor}
             persistInsight
           />
 
